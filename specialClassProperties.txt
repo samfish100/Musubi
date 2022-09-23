@@ -1,0 +1,39 @@
+class CLASS_NAME {
+  constructor params… {
+    // runs when instance is created
+  }
+
+  toString {
+    // how instances are converted into strings
+  }
+  toNumber, toBoolean, etc. {
+    // convert instance to that type
+  }
+  __stringName {
+    // name used inside brackets if 'toString' function is not defined
+  }
+
+  __is {
+    // what the class "is", as in the class should be treated as a string, number, etc.
+  }
+  __value {
+    // how to convert the class to the value; value must be of the type specified by '__is'
+    // for example, if '__is' returned "String" then '__value' must return a string
+  }
+
+  __get val {
+    // how to execute '[' (square bracket) operator
+  }
+
+  __onChange {
+    // runs every time the object is changed (not the value)
+  }
+
+  __call params… {
+    // runs when an instance of the class is "called"
+  }
+
+  static __call params… {
+    // runs when the class itself is "called"
+  }
+}

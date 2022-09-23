@@ -1,0 +1,148 @@
+<html>
+  <head>
+    <title>
+      nOt MuSuBi
+    </title>
+    <meta charset = "utf-8">
+    <link href = "./main.css" rel = "stylesheet">
+    <link rel = "preconnect" href = "https://fonts.gstatic.com"> 
+    <link href = "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&display=swap" rel = "stylesheet">
+  </head>
+  <body id = "darkTheme">
+    <div id = "flexContainer">
+      <div id = "topbar">
+        <button class = "button" id = "go">
+          Run
+        </button>
+        <span id = "version">
+          - version
+          <span id = "versionNumber"></span>
+          <span id = "versionInfo"></span>
+        </span>
+        <button class = "button" id = "showCanvas">
+          Show canvas
+        </button>
+        <button class = "button" id = "saveTxt">
+          Save as text (.txt)
+        </button>
+        <button class = "button" id = "saveExec">
+          Save as runnable file (.html)
+        </button>
+        <button class = "button" id = "langDebug">
+          Debug
+        </button>
+        <button class = "button" id = "bugTracker">
+          Bug tracker
+        </button>
+      </div>
+      <div id = "codeBackground">
+        <div id = "lineNumsBackground"></div>
+      </div>
+      <div id = "inputWrapper">
+        <div id = "lineNums">
+          1
+        </div>
+        <textarea id = "input" spellcheck = "false" wrap = "off"></textarea>
+        <div id = "debugPanel">
+          <div class = "title">
+            Debug language<br>
+            ================
+          </div>
+          <div class = "popupHeader">
+            characterizer
+          </div>
+          <button class = "popupButton" id = "debugCPeek">
+            peek
+          </button>
+          <button class = "popupButton" id = "debugCNext">
+            next
+          </button>
+          <button class = "popupButton" id = "debugCEof">
+            eof
+          </button>
+          <div class = "popupHeader">
+            tokenizer
+          </div>
+          <button class = "popupButton" id = "debugTPeek">
+            peek
+          </button>
+          <button class = "popupButton" id = "debugTNext">
+            next
+          </button>
+          <button class = "popupButton" id = "debugTEof">
+            eof
+          </button>
+          <div class = "popupHeader">
+            parser
+          </div>
+          <button class = "popupButton" id = "debugAST">
+            current ast
+          </button>
+          <div class = "popupHeader">
+            tests
+          </div>
+          <select id = "testSelect">
+            <option>
+              all tests
+            </option>
+          </select>
+          <button class = "popupButton" id = "runTests">
+            run selected tests
+          </button>
+        </div>
+      </div>
+      <div id = "consoleWrapper">
+        <div id = "consoleOutput"></div>
+        <div id = "consoleInputWrapper">
+          <div id = "consoleSeparator"></div>
+          <div id = "consoleInputFlex">
+            <div id = "consoleInputArrow">
+              <div id = "consoleArrowInner"></div>
+            </div>
+            <input id = "consoleInput" spellcheck = "false">
+            <button id = "clearConsole" class = "popupButton">
+              Clear console
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id = "bugReportPopup">
+      <div class = "title">
+        Bug tracker<br>
+        =============
+      </div>
+      <div class = "popupButton" id = "bugReportClose">
+        close
+      </div>
+      <div class = "popupHeader">
+        add a bug
+      </div>
+      <div id = "bugSubmitWrapper">
+        <div id = "bugInputWrapper">
+          <input id = "bugTitle">
+          <textarea id = "bugInput"></textarea>
+        </div>
+        <button class = "popupButton" id = "bugSubmit">
+          add
+        </button></div>
+      <div class = "popupHeader">
+        current bugs
+      </div>
+      <div id = "bugList"></div>
+    </div>
+  </body>
+  <script src = "./editor.js"></script>
+  <script src = "./chars.js"></script>
+  <script src = "./tokens.js"></script>
+  <script src = "./parser.js"></script>
+  <script src = "./builtins.js"></script>
+  <script src = "./exec.js"></script>
+  <script src = "./tests.js"></script>
+  <script type = "text/musubi">
+    <div>
+      HELLO THERE
+    </div>
+  </script>
+  <script>consoleMsg("========PAGE LOAD========","noJoinLog");console.log("==============================================================")</script>
+</html>
