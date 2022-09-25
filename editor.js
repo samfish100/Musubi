@@ -32,8 +32,7 @@ e("input").oninput = x => {
       cursorPos = e("input").selectionEnd
   
   if (cursorStart === cursorPos) {
-    var key = x.data,
-        output
+    var key = x.data, output
     
     if (key === "(") output = ")"
     else if (key === "[") output = "]"
@@ -41,7 +40,7 @@ e("input").oninput = x => {
     else if (key === "\"") output = "\""
     else if (key === "'") output = "'"
     else if (key === "`") output = "`"
-    else return;
+    else return
 
     e("input").value = code().slice(0, cursorPos) + output + code().slice(cursorPos)
     
@@ -71,7 +70,7 @@ e("input").onkeydown = x => {
     else if (key === "\"") output = ["\"", "\""]
     else if (key === "'") output = ["'", "'"]
     else if (key === "`") output = ["`", "`"]
-    else return;
+    else return
     
     e("input").value = code().slice(0, cursorStart) +
       output[0] + code().slice(cursorStart, cursorPos) + output[1] + code().slice(cursorPos)
@@ -117,7 +116,9 @@ e("input").onkeydown = x => {
         if (!x.metaKey) x.preventDefault()
       }
     } else if (key === "Tab") {
-      console.log("u pressed the (unimplemented) tabby tabber key")
+      e("input").value = code().slice(0, cursorPos) + "  " + code().slice(cursorPos)
+
+      e("input").selectionEnd = cursorPos + 2
       
       x.preventDefault()
     }
@@ -133,26 +134,23 @@ e("input").onkeydown = x => {
 
 function newLine(cursorPos, deIndent = false) {
   var beforeCursor = code().slice(0, cursorPos),
-      afterCursor = code().slice(cursorPos)
-
-  var currentLine = beforeCursor ? beforeCursor.split("\n").pop().trim() : ""
+      afterCursor = code().slice(cursorPos),
+      currentLine = beforeCursor ? beforeCursor.split("\n").pop().trim() : ""
 
   var doKeywordIndent = (/^(if|else|for|while|repeat|function|loop)\b[^:]*$/.test(currentLine) &&
       !currentLine.endsWith(";") && !currentLine.endsWith("end")) ||
       /\b(block)((\s+[\w\s,]+)|(\([\w\s,]+\)))?$/.test(currentLine)
 
   var openSquare = currentLine.match(/\[/g)?.length || 0 - currentLine.match(/]/g)?.length || 0,
-      openCurly = currentLine.match(/{/g)?.length || 0 - currentLine.match(/}/g)?.length || 0
+      openCurly = currentLine.match(/{/g)?.length || 0 - currentLine.match(/}/g)?.length || 0,
+      indent = 0
 
-  var indent = 0
   if (beforeCursor && ("{[&|*^=".includes(beforeCursor.slice(-1)) || doKeywordIndent)) indent = 2
   if (deIndent || (openSquare === 0 && afterCursor.startsWith("]"))
     || (openCurly === 0 && afterCursor.startsWith("}")) ||
     afterCursor.startsWith("end") || afterCursor.startsWith(";")) indent = -2
   
-  var prevIndent = Math.floor(beforeCursor.split("\n").pop().search(/\S|$/))
-
-  var indents = ""
+  var prevIndent = Math.floor(beforeCursor.split("\n").pop().search(/\S|$/)), indents = ""
   for (let i = 0; i < prevIndent + indent; i++) indents += " "
 
   e("input").value = beforeCursor + "\n" + indents + (deIndent === "end" ? "end" : "") + afterCursor
@@ -187,7 +185,7 @@ e("consoleInput").onblur = () => {
   setTimeout(() => { consoleOutput.scrollTop = scrollPos + 250 }, 200)
 }
 
-e("consoleInput").onkeydown = () => {
+e("consoleInput").onkeydown = event => {
   if (event.code === "Enter") {
     consoleMsg(e("consoleInput").value.trim(), "input")
 
@@ -312,11 +310,27 @@ function run() {
 
   setTimeout(() => {
     try {
-      initializeParser()
-      ast = parser.GO()
+      console.log("========Starting code processing========")
 
+      console.time("total")
+
+      console.time("init")
+      initializeParser()
+      console.timeEnd("init")
+
+      console.time("parsing")
+      ast = parser.GO()
+      console.timeEnd("parsing")
+
+      console.time("execInit")
       executor = new Executor(ast)
+      console.timeEnd("execInit")
+
+      console.time("running")
       executor.GO()
+      console.timeEnd("running")
+
+      console.timeEnd("total")
     } catch (err) {
       consoleMsg(err, "error")
 
@@ -350,24 +364,30 @@ function consoleMsg(msg, type) {
 
 const errorUserMsg = "It looks like you've discovered a bug in the code.\nPlease show this message and your code to a developer."
 function problem(msg, stack) {
-  console.log("%cPROBLEM:", "font-weight: 700; color: red; text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);")
-  console.error(msg)
-
   var loc = location.href.replace("index.html", ""),
       err = new Error(msg)
 
   err.stack = err.stack.slice(err.stack.indexOf("\n"))
 
   consoleMsg(`${errorUserMsg}\n\n====================\n${err.line}:${err.column}\n${err.message}\n====================\n\n${(stack ?? err.stack).replaceAll(loc, "./")}`, "problem")
+
+  var consoleErr = new Error(msg)
+
+  consoleErr.name = "PROBLEM"
+
+  throw consoleErr
 }
 
 function formatMessage(message, indent = "") {
   if (typeof message === "string") return `"${message}"`
+  else if (message === null) return "null"
   else if (typeof message === "object") {
+    var output
+
     if (Array.isArray(message)) {
       if (!message.length) return "[]"
 
-      var output = "["
+      output = "["
 
       message.forEach(x => { output += `\n${indent + "  "}${formatMessage(x, indent + "  ")},` })
 
@@ -375,7 +395,7 @@ function formatMessage(message, indent = "") {
     } else {
       if (!Object.keys(message).length) return "{}"
 
-      var output = "{"
+      output = "{"
 
       Object.keys(message).forEach(x => { output += `\n${indent + "  "}${x} : ${formatMessage(message[x], indent + "  ")},` })
 
@@ -386,7 +406,7 @@ function formatMessage(message, indent = "") {
   return message
 }
 
-// DEBUG TOOL:
+// DEBUG TOOL
 
 var showDebugMenu = false
 e("langDebug").onclick = () => {

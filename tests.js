@@ -464,7 +464,7 @@ var TESTRESULTS = {};
     },
     funcDefinition : {
       input : `function test val
-  val + 2
+  print val
 end`,
       expected : [],
       useLogs : true,
@@ -472,11 +472,11 @@ end`,
     },
     funcDefinitionWithCall : {
       input : `function test val
-  val + 2
+  print val
 end
 
 print test 123`,
-      expected : [],
+      expected : ["123", "null"],
       useLogs : true,
       run : basicExecTest
     },

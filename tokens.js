@@ -9,7 +9,7 @@ const keywords = [
 class Tokenizer {
   constructor (ch) {
     this.ch = ch
-    this.newLine = false
+    this._newLine = false
     this.sawSpace = false
   }
 
@@ -17,6 +17,7 @@ class Tokenizer {
     if (this.current) return this.current
     else return this.current = this.nextTok()
   }
+
   next() {
     var tok = this.peek()
 
@@ -28,20 +29,24 @@ class Tokenizer {
 
       char = this.ch.peek()
     }
-    // this.newLine = char === "\n"
 
     return tok
   }
-  eof () {
-    return this.ch.eof()
+
+  eof() {
+    return !this.current?.type && this.ch.eof()
+  }
+
+  get newLine() {
+    if (!this.current) void this.peek()
+
+    return this._newLine
   }
 
   nextTok() {
-    this.newLine = false
+    this._newLine = false
 
     var char = this.skipSpaces(this.ch.next())
-
-    this.newLine ||= this.eof()
 
     if (char) {
       if ("()[]{},:;@".includes(char)) return this.formatReturn("punc", char)
@@ -54,9 +59,10 @@ class Tokenizer {
 
     return this.formatReturn(null, null)
   }
+
   skipSpaces(char) {
     while (char === " " || char === "\n") {
-      this.newLine ||= char === "\n"
+      this._newLine ||= char === "\n"
 
       char = this.ch.next()
     }
@@ -67,7 +73,7 @@ class Tokenizer {
   formatReturn(type, value) {
     var spaceBefore = this.sawSpace
 
-    this.sawSpace = this.ch.peek() === " "
+    this.sawSpace = this.ch.peek() === " " || this.ch.peek() === "\n"
 
     return {
       type : type,
@@ -81,9 +87,9 @@ class Tokenizer {
 
     if ("!><+-*/^%&|=".includes(char) && nextChar === "=")
       return this.formatReturn("operator", char + this.ch.next())
-    else if ("+-*&|?".includes(char) && nextChar === char) {
+    else if ("+-*&|?.".includes(char) && nextChar === char) {
       this.ch.next()
-      if (("&|*?".includes(char)) && this.ch.peek() === "=")
+      if (("*&|?.".includes(char)) && this.ch.peek() === "=")
         return this.formatReturn("operator", char + nextChar + this.ch.next())
 
       return this.formatReturn("operator", char + nextChar)

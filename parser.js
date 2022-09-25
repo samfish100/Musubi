@@ -1,8 +1,12 @@
 const operatorPrecedence = {
-  "$" : 18, "." : 18, "[" : 18,
+  "." : 18, ":" : 18, "[" : 18,
+  "$" : 17,
+  "(" : 16,
+  "!" : 15,
   "**" : 14,
   "*" : 13, "/" : 13, "%" : 13,
   "+" : 12, "-" : 12,
+  ".." : 11,
   "<" : 10, ">" : 10, "<=" : 10, ">=" : 10,
   "==" : 9, "!=" : 9,
   "&" : 8,
@@ -11,8 +15,11 @@ const operatorPrecedence = {
   "&&" : 5,
   "||" : 4, "??" : 4,
   "?" : 3,
-  "+=" : 2, "-=" : 2, "*=" : 2, "/=" : 2, "^=" : 2, "%=" : 2, "&=" : 2, "|=" : 2, "&&=" : 2, "||=" : 2, "**=" : 2, "??=" : 2
-}, rightToLeftOperators = [2, 3, 14]
+  "=" : 2, "+=" : 2, "-=" : 2, "*=" : 2, "/=" : 2, "^=" : 2, "%=" : 2, "&=" : 2, "|=" : 2, "&&=" : 2, "||=" : 2, "**=" : 2, "??=" : 2
+}
+const rightToLeftOperators = [2, 3, 14],
+      prefixOperators = ["!", "$"],
+      postfixOperators = ["[", "("]
 
 class Parser {
   constructor(t) { this.t = t }
@@ -29,19 +36,38 @@ class Parser {
     var ast = this.blankAst()
 
     while (!this.t.eof()) {
+      var tok = this.t.peek(), singleLine = false
+
+      if (checkForEnd) {
+        if (tok.type === "punc" && tok.value === ":") {
+          tokenizer.next()
+          singleLine = true
+        } else if (!this.t.newLine) error(this.unexpectedToken(tok, "expected a new line or ':' to start code block"))
+      }
+
       var statement = this.nextStatement(inFunction)
       ast[statement.type === "funcDecl" ? "declarations" : "statements"].push(statement)
 
-      if (this.t.eof()) return ast
-
-      var tok = this.t.peek()
-      if (checkForEnd && ((tok.type === "punc" && tok.value === ";") || (tok.type === "keyword" && tok.value === "end"))) {
-        this.t.next()
+      if (this.t.eof()) {
+        if (checkForEnd && !singleLine) error(`Unterminated ${inFunction ? "function body" : "code block"}.`)
 
         return ast
       }
 
-      if (!this.t.newLine) error(this.unexpectedToken(this.t.peek().value, "expected a new line, ';', or 'end'"))
+      tok = this.t.peek()
+      if (singleLine || (checkForEnd && ((tok.type === "punc" && tok.value === ";") || (tok.type === "keyword" && tok.value === "end")))) {
+        if (!singleLine) this.t.next()
+
+        return ast
+      }
+
+      console.log(this.t.peek(), this.t.newLine, this.t.eof())
+
+      if (!this.t.newLine && !this.t.eof())
+        error(this.unexpectedToken(
+          this.t.peek(),
+          checkForEnd ? "expected a new line, ';', or 'end'" : "expected a new line at the end of statement"
+        ))
     }
 
     error("Empty code block.", true)
@@ -72,41 +98,121 @@ class Parser {
   }
 
   parseExpression(tok, isNumerical) {
-    var stack = [this.parseNoOpExpression(tok, isNumerical)]
+    var stack = []
 
-    if (stack[0] === null) return null
+    this.parseExpressionSegment(tok, isNumerical, stack)
 
     tok = this.t.peek()
-    if (this.isTokOperator(tok)) return this.parseOperation(stack)
-    else if ("prefix" in stack[0]) return this.parseOperation([], stack[0])
+
+    while (this.isTokOperator(tok) && !postfixOperators.includes(tok.value)) {
+      stack.push({op : tok.value})
+
+      this.t.next()
+      tok = this.t.next()
+
+      this.parseExpressionSegment(tok, isNumerical, stack)
+
+      tok = this.t.peek()
+    }
+
+    var maxMergeAttempts = stack.length
+
+    if (stack.length % 2 === 0) problem("Unexpected expression stack length.")
+
+    while (stack.length > 1) {
+      for (let i = 1; i < stack.length - 1; i += 2) {
+        var opPrecedence = operatorPrecedence[stack[i].op],
+            left = stack[i - 2],
+            right = stack[i + 2]
+
+        if ((stack[i - 1] === null && !stack[i].prefix) ||
+          (stack[i + 1] === null && !stack[i].postfix))
+          opPrecedence = -1
+        else if (
+          // left side
+          (!left || (left.opPrecedence && (left.opPrecedence < opPrecedence /* || condition for right->left operators */))) &&
+          // right side
+          (!right || (right.opPrecedence && (right.opPrecedence <= opPrecedence /* || condition for right->left operators */)))
+        ) {
+          stack.splice(i - 1, 3, {
+            type : "operation",
+            left : stack[i - 1],
+            right : stack[i + 1],
+            extra : stack[i].extra || null,
+            op : stack[i].op,
+            prefix : Boolean(stack[i].prefix),
+            postfix : Boolean(stack[i].postfix)
+          })
+
+          break
+        }
+        
+        stack[i].opPrecedence = opPrecedence
+      }
+
+      maxMergeAttempts--
+      if (maxMergeAttempts <= 0) problem("Unable to parse expression.")
+    }
 
     return stack[0]
   }
-  parseNoOpExpression(tok, isNumerical) {
-    if (tok.type === "operator" && ["!", "+", "-"].includes(tok.value))
-      return {
-        prefix : true,
-        value : tok.value
+
+  parseExpressionSegment(tok, isNumerical, stack) {
+    while (this.isTokOperator(tok) && prefixOperators.includes(tok.value)) {
+      stack.push(...this.formatPrefixForStack(tok.value, false))
+
+      tok = this.t.next()
+    }
+
+    stack.push(this.parseNoOpExpression(tok, isNumerical))
+
+    tok = this.t.peek()
+    while (this.isTokOperator(tok) && postfixOperators.includes(tok.value)) {
+      if (tok.value === "(") {
+        this.t.next()
+
+        var params = this.parseParameters(true)
+
+        stack.push({op : "(", postfix : true, extra : params}, null)
+      } else if (tok.value === "[") {
+        this.t.next()
+
+        var index = this.parseExpression(this.t.next(), true)
+
+        tok = this.t.next()
+        if (tok.type !== "punc" || tok.value !== "]") error(this.unexpectedToken(tok, "expected ']' to end array access"))
+
+        stack.push({op : "[", postfix : true, extra : index}, null)
+      } else {
+        this.t.next()
+
+        stack.push(...this.formatPrefixForStack(tok.value, true))
       }
 
-    var expression, nextTok = this.t.peek()
+      tok = this.t.peek()
+    }
+  }
 
+  parseNoOpExpression(tok, isNumerical) {
     if (tok.type === "string")
       if (!isNumerical)
-        expression = {
+        return {
           type : "string",
           value : tok.value
         }
       else error("Unexpected string, expected a numerical expression.")
     else if (tok.type === "number")
-      expression = {
+      return {
         type : "number",
         value : tok.value
       }
-    else if (tok.type === "identifier" && !(nextTok.type === "operator" && nextTok.value === "="))
-      expression = this.parseReference(tok)
+    else if (tok.type === "identifier")
+      return {
+        type : "identifier",
+        value : tok.value
+      }
     else if (tok.type === "punc" && tok.value === "(") {
-      var innerExpression = this.parseExpression(this.t.next())
+      var innerExpression = this.parseExpression(this.t.next(), isNumerical)
 
       var parenthesis = this.t.next()
       if (parenthesis.type === "punc" && parenthesis.value === ")") return innerExpression
@@ -115,93 +221,60 @@ class Parser {
     } else if (tok.type === "keyword" && (tok.value === "true" || tok.value === "false")) {
       if (isNumerical) error("Unexpected boolean, expected a numerical expression.")
 
-      expression = {
+      return {
         type : "boolean",
         value : tok.value
       }
     } else if (tok.type === "keyword" && tok.value === "null") {
       if (isNumerical) error("Unexpected null, expected a numerical expression.")
 
-      expression = { type : "null" }
-    } else error(`Unexpected token '${tok.value}'.`)
+      return {type : "null"}
+    } else if (tok.type === "punc" && tok.value === "[") {
+      if (isNumerical) error("Unexpected array, expected a numerical expression.")
 
-    return expression
-  }
+      var values = this.parseExpressionList("]")
 
-  parseOperation(stack, prefixOp) {
-    do {
-      var operator, expression
-      if (!prefixOp) {
-        operator = this.t.next()
-        if (operator.value === "[") {
-          expression = this.parseExpression(this.t.next(), true)
+      tok = this.t.next()
+      if (tok.type !== "punc" || tok.value !== "]") error(this.unexpectedToken(tok, "expected ']' to end array."))
 
-          var bracket = this.t.next()
-          if (bracket.type !== "punc" || bracket.value !== "]") error(this.unexpectedToken(bracket, "expected ']'"))
-        } else expression = this.parseNoOpExpression(this.t.next())
-      } else {
-        operator = prefixOp
-        expression = this.parseNoOpExpression(this.t.next())
-        prefixOp = false
+      return {
+        type : "array",
+        value : values
       }
-
-      if ("prefix" in expression)
-        if (expression.prefix) stack.push(null, expression.value)
-        else stack.push(expression.value, null)
-
-      if (stack.length > 2 && operatorPrecedence[operator.value] < operatorPrecedence[stack[stack.length - 2]])
-        this.mergeStackItems(stack)
-
-      stack.push(operator.value, expression)
-    } while (this.isTokOperator(this.t.peek()))
-
-    while (stack.length > 2) this.mergeStackItems(stack)
-
-    return stack
+    } else error(this.unexpectedToken(tok))
   }
-  mergeStackItems(stack) {
-    stack.splice(-3, 3, {
-      type : "operation",
-      operator : stack[stack.length - 2],
-      left : stack[stack.length - 3],
-      right : stack[stack.length - 1]
-    })
-  }
-  isTokOperator(tok) { return tok.type === "operator" || (tok.value === "[" && tok.type === "punc" && !tok.spaceBefore) }
 
-  parseReference(nameTok) {
+  formatPrefixForStack(op, isPost) {
+    return isPost
+      ? [{postfix : true, op}, null]
+      : [null, {prefix : true, op}]
+  }
+
+  isTokOperator(tok) {
+    return tok.type === "operator" ||
+      (tok.value === "[" && tok.type === "punc" && !tok.spaceBefore) ||
+      (tok.value === "(" && tok.type === "punc" && !tok.spaceBefore)
+  }
+
+  parseParameters(paren = false) {
     var params = []
 
-    if (!this.t.newLine) {
-      var tok = this.t.peek(), paren = false
-      if (tok.type === "punc" && tok.value === "(") {
-        this.t.next()
+    var tok = this.t.peek()
 
-        paren = true
-      }
+    if (paren && tok.type === "punc" && tok.value === ")") this.t.next()
+    else if (!this.t.eof()) {
+      params = this.parseExpressionList(paren && ")")
 
-      tok = this.t.peek()
-
-      if (paren && tok.type === "punc" && tok.value === ")") this.t.next()
-      else {
-        params = this.parseExpressionList(paren)
-
-        if (paren) {
-          console.log(tok)
-          tok = this.t.next()
-          if (tok.type !== "punc" || tok.value !== ")") error(this.unexpectedToken(tok, "expected ')'"))
-        }
+      if (paren) {
+        tok = this.t.next()
+        if (tok.type !== "punc" || tok.value !== ")") error(this.unexpectedToken(tok, "expected ')' to end function call"))
       }
     }
 
-    return {
-      type : "reference",
-      name : nameTok.value,
-      params : params
-    }
+    return params
   }
 
-  parseExpressionList(parens) {
+  parseExpressionList(closeChar) {
     var expression, expressions = [], tok
 
     do {
@@ -210,35 +283,16 @@ class Parser {
 
       tok = this.t.peek()
 
-      if (tok.type !== "punc" || tok.value !== ",") {
-        if (!parens) break
-      } else this.t.next()
-    } while (parens ? tok.type !== "punc" || tok.value !== ")" : !this.t.newLine)
+      if (tok.type === "punc" && tok.value === ",") this.t.next()
+      else if (!closeChar) break
+    } while (!closeChar || tok.type !== "punc" || tok.value !== closeChar)
+
 
     return expressions
-
-    /*var expression = this.parseExpression(this.t.next(), false, true), expressions = [], sawComma = false
-
-    while (expression && (sawComma || parens || !this.t.newLine)) {
-      expressions.push(expression)
-
-      var tok = this.t.peek()
-      if (tok.type === "punc" && tok.value === ",") {
-        this.t.next()
-
-        sawComma = true
-      } else sawComma = false
-
-      expression = this.parseExpression(this.t.next(), false, true)
-    }
-    if (expression) expressions.push(expression)
-
-    return expressions*/
   }
 
-  parseIdentifierList(optional, inFunc) {
+  parseIdentifierList(optional, parens) {
     // TODO if inFunc is true check for '= <expression>' to parse optional params
-    // TODO rewrite this hairball
     var identifier = this.t.peek(), identifiers = [], sawComma = false
 
     if (!(identifier.type === "identifier")) {
@@ -252,33 +306,45 @@ class Parser {
 
       identifiers.push({name : identifier.value /* default : insert ast for param default here */})
 
-      if (this.t.newLine) break
+      if (this.t.newLine && !parens) break
 
       identifier = this.t.peek()
 
-      if (!sawComma && identifier.type === "punc" && identifier.value === ",") {
+      if (identifier.type === "punc" && identifier.value === ",") {
         this.t.next()
         identifier = this.t.peek()
 
         sawComma = true
-      } else sawComma = false
-    }
+      }
 
-    if (sawComma) error("Unexpected ',' at end of identifier list.")
+      if (identifier.type === "punc" && identifier.value === ")") {
+        if (sawComma) error("Unexpected ',' at end of identifier list.")
+
+        this.t.next()
+
+        break
+      }
+
+      sawComma = false
+    }
 
     return identifiers
   }
 
   parseFuncDecl() {
-    var tok = this.t.next()
-    if (tok.type === "identifier") var name = tok.value
+    var tok = this.t.next(), name, parens = false
+
+    if (tok.type === "identifier") name = tok.value
+    else if (tok.type === "keyword") error("Keywords cannot be used as namespaces.")
     else error(this.unexpectedToken(tok, "expected an identifier"))
 
-    var params = this.t.newLine ? [] : this.parseIdentifierList(true, true)
-
     tok = this.t.peek()
-    if (tok.type === "punc" && tok.value === ":") tokenizer.next()
-    else if (!this.t.newLine) error(this.unexpectedToken(tok, "expected an identifier, new line, or ':'"))
+    if (tok.type === "punc" && tok.value === "(") {
+      parens = true
+      this.t.next()
+    }
+
+    var params = this.t.newLine ? [] : this.parseIdentifierList(true, parens)
 
     return {
       type : "funcDecl",
@@ -312,7 +378,7 @@ class Parser {
   }
 
   unexpectedToken(tok, extra) {
-    var token = tok.value ? `token '${tok.value}'` : "<END OF FILE>"
+    var token = tok.value ? `token '${tok.value}'` : "end of file"
 
     return `Unexpected ${token}${extra ? ", " + extra : ""}.`
   }

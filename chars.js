@@ -38,10 +38,13 @@ class Characterizer {
 
     for (let i = this.lines.length - 1; i >= 0; i--) {
       if (this.lines[i].trim().length) break
-      else blankEndLines++
+
+      blankEndLines++
     }
 
-    return this.lines.length - blankEndLines - 1 <= line && this.lines[this.lines.length - 1].length <= column
+    var lastLine = this.lines.length - 1 - blankEndLines
+
+    return line > lastLine || (line >= lastLine && this.lines[this.lines.length - blankEndLines - 1].length <= column)
   }
 }
 

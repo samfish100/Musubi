@@ -24,16 +24,16 @@ function fillGlobalEnv(env) {
   env.getVar = new builtIns.Function([null], (th, params) => {
     if (!params.length || !(params[0].is("String"))) error("Variable/namespace name for getVar must be a string.", false, true)
 
-    if (params[1] && !(params[1].is("Block"))) error("Catch function for getVar must be a block or blank.")
+    if (!th.valueExists(params[0].value)) {
+      if (params[1] && params[1].func("toBoolean").value) error("Variable/namespace name for getVar does not exist.", false, true)
+      else return new builtIns.Null()
+    }
 
-    if (!th.valueExists(params[0].value)) params[1]?.call()
-    // return th.
+    return th.getValue(params[0].value)
   })
   // move to console.
   env.print = new builtIns.Function([null], (_, params) => {
-    if (!params.length) log(null)
-    else
-      for (let i of params) log(i.func("toString").value)
+    for (let i of params) log(i.func("toString").value)
   })
   // move to __debug.
   env.consolePrint = new builtIns.Function([null], (_, params) => {
@@ -203,6 +203,7 @@ builtIns.String = class extends Base {
   data = fields.String
   name = "String"
 }
+
 fields.Number = {}
 builtIns.Number = class extends Base {
   constructor(value = 0) {
@@ -215,6 +216,7 @@ builtIns.Number = class extends Base {
   data = fields.Number
   name = "Number"
 }
+
 fields.Boolean = {}
 builtIns.Boolean = class extends Base {
   constructor(value) {
@@ -225,6 +227,7 @@ builtIns.Boolean = class extends Base {
   data = fields.Boolean
   name = "Boolean"
 }
+
 fields.Null = {}
 builtIns.Null = class extends Base {
   constructor() {
@@ -257,6 +260,7 @@ builtIns.Function = class extends Base {
   }
   bind(thisArg) { this.thisArg = thisArg }
 }
+
 fields.Block = {}
 builtIns.Block = class extends Base {
   constructor(params, body) {
@@ -402,9 +406,9 @@ fields.Array.toString = new builtIns.Function([], (th, params) => {
   var delimiter = ", "
   if (params.length)
     if (params[0].is("String")) delimiter = params[0].value
-    else error("Delimiter for [Array].stringPath must be a string or blank.")
+    else error("Delimiter for [Array].toString must be a string or blank.")
 
-  return new builtIns.String(`[${th.value.map(x => x.toString()).join(delimiter)}]`)
+  return new builtIns.String(`[${th.value.map(x => x.func("toString").value).join(delimiter)}]`)
 })
 fields.Array.length = new builtIns.Function([], th => new builtIns.Number(th.value.length))
 fields.Array.reverse = new builtIns.Function([], th => new builtIns.Array(th.value.sort(() => false)))

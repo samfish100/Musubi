@@ -43,43 +43,83 @@ class Executor {
     else if (ast.type === "return") this.return = this.execExpression(ast.expression)
     else if (ast.type === "if") this.execIf(ast)
     else if (ast.type === "loop") this.execLoop(ast)
-    else error(`Statement type ${ast.type} is currently not implemented, it will be ignored`, true, true)
+    else error(`Statement type ${ast.type} is currently not implemented, it will be ignored.`, true, true)
   }
 
   execExpression(ast) {
-    if (ast.type === "reference") return this.execReference(ast)
+    if (ast.type === "operation") return this.execOperation(ast)
+    else if (ast.type === "identifier") return this.execReference(ast.value)
     else if (ast.type === "number") return new builtIns.Number(ast.value)
     else if (ast.type === "string") return new builtIns.String(ast.value)
     else if (ast.type === "boolean") return new builtIns.Boolean(ast.value === "true")
     else if (ast.type === "null") return new builtIns.Null()
+    else if (ast.type === "array") return new builtIns.Array(ast.value.map(x => this.execExpression(x)))
 
-    error(`Expression type ${ast.type} is currently not implemented, it will be replaced with a null`, true, true)
+    error(`Expression type ${ast.type} is currently not implemented, it will be replaced with a null.`, true, true)
     return new builtIns.Null()
   }
 
-  execReference(ast) {
-    var value = this.currentEnv.getValue(ast.name, true)
+  execReference(name) {
+    return this.currentEnv.getValue(name, true)
+  }
 
-    if (value instanceof builtIns.Function) {
+  execOperation(ast) {
+    var {left, right, op} = ast
+
+    if (left) left = this.execExpression(left)
+    if (right && op !== "&&" && op !== "||") right = this.execExpression(right)
+
+    if (op === "(") {
+      return this.execFuncCall(left, ast.extra)
+      // ARITHMETIC
+    } else if (op === "+") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value + right.value)
+      else if (left.is("Array") && right.is("Array")) return new builtIns.Array(left.value.concat(right.value))
+      else error(`Cannot add types ${left.name} and ${right.name}.`, false, true)
+    } else if (op === "-") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value - right.value)
+      else error(`Cannot subtract types ${left.name} and ${right.name}.`, false, true)
+    } else if (op === "*") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value * right.value)
+      else error(`Cannot multiply types ${left.name} and ${right.name}.`, false, true)
+    } else if (op === "/") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value / right.value)
+      else error(`Cannot divide types ${left.name} and ${right.name}.`, false, true)
+    } else if (op === "**") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value ** right.value)
+      else error(`Cannot raise type ${left.name} to type ${right.name}.`, false, true)
+      // LOGIC
+    } else if (op === "&&") {
+      if (!left.func("toBoolean").value) return left
+      return this.execExpression(right)
+    } else if (op === "||") {
+      if (left.func("toBoolean").value) return left
+      return this.execExpression(right)
+    } else if (op === "!")
+      return new builtIns.Boolean(!right.func("toBoolean").value)
+
+    error(`Operator type ${op} is currently not implemented, it will be replaced with a null.`, true, true)
+    return new builtIns.Null()
+  }
+
+  execFuncCall(func, params) {
+    if (func instanceof builtIns.Function) {
       var requiredParams = 0
-      value.params.forEach(x => { if (x === null || !("default" in x)) requiredParams++ })
-      if (ast.params.length < requiredParams) error(`Not enough parameters passed to function ${ast.name} (expected ${(requiredParams < value.params.length ? "at least " : "") + requiredParams}).`, false, true)
+      func.params.forEach(x => { if (x === null || !("default" in x)) requiredParams++ })
+      if (params.length < requiredParams) error(`Not enough parameters passed to function (expected ${(requiredParams < func.params.length ? "at least " : "") + requiredParams}).`, false, true)
 
       var parameters = {}, returnVal
 
-      // TODO pass thisArg as first parameter (instead of empty object placeholder)
-      if (value.body instanceof Function) returnVal = value.body(/*THIS ARG*/{}, ast.params.map(x => this.execExpression(x)))
+      if (func.body instanceof Function) returnVal = func.body(this.currentEnv, params.map(x => this.execExpression(x)))
       else {
-        for (let i in value.params) parameters[value.params[i].name] = this.execExpression(ast.params[i])
+        for (let i in func.params) parameters[func.params[i].name] = this.execExpression(params[i])
 
-        returnVal = this.execBlock(value.body, true, parameters)
+        returnVal = this.execBlock(func.body, true, parameters)
       }
 
       return returnVal === undefined ? new builtIns.Null() : returnVal
-    } else if (ast.params.length) {
-      if (value instanceof builtIns.Null) error("Unexpected parameter list; null is not a function.", false, true)
-      error(`Unexpected parameter list${(ast.name ? `; namespace ${ast.name} is not a function` : "")}.`, false, true)
-    } else return value
+    } else if (ast.params.length)
+      error(`Unexpected parameter list; ${func.func("toString").value} is not a function.`, false, true)
   }
 
   execFuncDecl(ast) {
