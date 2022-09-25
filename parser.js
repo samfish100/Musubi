@@ -82,7 +82,7 @@ class Parser {
   }
 
   nextStatement(inFunction) {
-    var tok = this.t.next(), nextTok = this.t.peek(), statement
+    var tok = this.t.next(), statement
 
     if (tok.type === "keyword" && tok.value === "function") statement = this.parseFuncDecl()
     else if (tok.type === "keyword" && tok.value === "if") statement = this.parseIf()
@@ -213,6 +213,8 @@ class Parser {
       }
     else if (tok.type === "punc" && tok.value === "(") {
       var innerExpression = this.parseExpression(this.t.next(), isNumerical)
+
+      innerExpression.parentheses = true
 
       var parenthesis = this.t.next()
       if (parenthesis.type === "punc" && parenthesis.value === ")") return innerExpression

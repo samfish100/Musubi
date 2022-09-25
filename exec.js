@@ -48,7 +48,7 @@ class Executor {
 
   execExpression(ast) {
     if (ast.type === "operation") return this.execOperation(ast)
-    else if (ast.type === "identifier") return this.execReference(ast.value)
+    else if (ast.type === "identifier") return this.currentEnv.getValue(ast.value, true)
     else if (ast.type === "number") return new builtIns.Number(ast.value)
     else if (ast.type === "string") return new builtIns.String(ast.value)
     else if (ast.type === "boolean") return new builtIns.Boolean(ast.value === "true")
@@ -59,15 +59,12 @@ class Executor {
     return new builtIns.Null()
   }
 
-  execReference(name) {
-    return this.currentEnv.getValue(name, true)
-  }
-
   execOperation(ast) {
-    var {left, right, op} = ast
+    var {left, right, op} = ast,
+        isAssignment = op.endsWith("=") && !["==", "!=", ">=", "<="].includes(op)
 
-    if (left) left = this.execExpression(left)
-    if (right && op !== "&&" && op !== "||") right = this.execExpression(right)
+    if (left && !isAssignment) left = this.execExpression(left)
+    if (right && !["&&", "||", "."].includes(op)) right = this.execExpression(right)
 
     if (op === "(") {
       return this.execFuncCall(left, ast.extra)
@@ -97,6 +94,33 @@ class Executor {
       return this.execExpression(right)
     } else if (op === "!")
       return new builtIns.Boolean(!right.func("toBoolean").value)
+      // ASSIGNMENT
+    else if (isAssignment) {
+      if (left.type === "identifier") {
+        this.currentEnv.setValue(left.value, right)
+
+        return right
+      } else if (left.type === "operation" && left.op === ".") {
+        var key = left.right
+
+        if (key.type !== "identifier" && !key.parentheses)
+          error("Invalid right side of lookup expression.")
+
+        if (key.parentheses) key = this.execExpression(key).func("toString")
+
+        this.execExpression(left.left).setValue(key.value, right)
+
+        return right
+      } else error("Left side of assignment expression is not a reference.", false, true)
+      // LOOKUP
+    } else if (op === ".") {
+      if (right.type !== "identifier" && !right.parentheses)
+        error("Invalid right side of lookup expression.")
+
+      if (right.parentheses) right = this.execExpression(right).func("toString")
+
+      return left.getValue(right.value, true)
+    }
 
     error(`Operator type ${op} is currently not implemented, it will be replaced with a null.`, true, true)
     return new builtIns.Null()

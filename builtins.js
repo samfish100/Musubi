@@ -102,9 +102,10 @@ class Base {
     this.setThisValue(name, value)
   }
 
-  getValue(name) {
+  getValue(name, mustExist = false) {
     if (name in this.data && this.data[name] instanceof Base) return this.data[name]
     else if ("parent" in this) return this.parent.getValue(name)
+    else if (mustExist) error(`Property ${name} does not exist.`, false, true)
 
     return new builtIns.Null()
   }
