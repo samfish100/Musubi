@@ -61,7 +61,7 @@ class Executor {
 
   execOperation(ast) {
     var {left, right, op} = ast,
-        isAssignment = op.endsWith("=") && !["==", "!=", ">=", "<="].includes(op)
+        isAssignment = op.endsWith("=") && !["==", "!=", ">=", "<=", "~="].includes(op)
 
     if (left && !isAssignment) left = this.execExpression(left)
     if (right && !["&&", "||", "."].includes(op)) right = this.execExpression(right)
@@ -94,8 +94,27 @@ class Executor {
       return this.execExpression(right)
     } else if (op === "!")
       return new builtIns.Boolean(!right.func("toBoolean").value)
+      // EQUALITY
+    else if (op === "==")
+      return new builtIns.Boolean(left === right || left.value === right.value)
+    else if (op === "!=")
+      return new builtIns.Boolean(left !== right && left.value !== right.value)
+    else if (op === "~=")
+      return new builtIns.Boolean(left === right || left.func("toString").value === right.func("toString").value)
+    else if (op === "<") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value < right.value)
+      else error(`Invalid types ${left.name} and ${right.name} for '<' operator.`)
+    } else if (op === ">") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value > right.value)
+      else error(`Invalid types ${left.name} and ${right.name} for '>' operator.`)
+    } else if (op === "<=") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value <= right.value)
+      else error(`Invalid types ${left.name} and ${right.name} for '<=' operator.`)
+    } else if (op === ">=") {
+      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value >= right.value)
+      else error(`Invalid types ${left.name} and ${right.name} for '>=' operator.`)
       // ASSIGNMENT
-    else if (isAssignment) {
+    } else if (isAssignment) {
       if (left.type === "identifier") {
         this.currentEnv.setValue(left.value, right)
 
@@ -120,6 +139,10 @@ class Executor {
       if (right.parentheses) right = this.execExpression(right).func("toString")
 
       return left.getValue(right.value, true)
+    } else if (op === "[") {
+      // if (!right.is("Number") || !Number.isInteger(right.value)) error("Lookup index is not an integer.")
+
+      return left.squareBracketGet(right)
     }
 
     error(`Operator type ${op} is currently not implemented, it will be replaced with a null.`, true, true)
@@ -141,7 +164,7 @@ class Executor {
         returnVal = this.execBlock(func.body, true, parameters)
       }
 
-      return returnVal === undefined ? new builtIns.Null() : returnVal
+      return returnVal || new builtIns.Null()
     } else if (ast.params.length)
       error(`Unexpected parameter list; ${func.func("toString").value} is not a function.`, false, true)
   }

@@ -1,4 +1,5 @@
 const operatorPrecedence = {
+  // ~
   "." : 18, ":" : 18, "[" : 18,
   "$" : 17,
   "(" : 16,
@@ -18,7 +19,7 @@ const operatorPrecedence = {
   "=" : 2, "+=" : 2, "-=" : 2, "*=" : 2, "/=" : 2, "^=" : 2, "%=" : 2, "&=" : 2, "|=" : 2, "&&=" : 2, "||=" : 2, "**=" : 2, "??=" : 2
 }
 const rightToLeftOperators = [2, 3, 14],
-      prefixOperators = ["!", "$"],
+      prefixOperators = ["!", "$", "~"],
       postfixOperators = ["[", "("]
 
 class Parser {
@@ -130,9 +131,9 @@ class Parser {
           opPrecedence = -1
         else if (
           // left side
-          (!left || (left.opPrecedence && (left.opPrecedence < opPrecedence /* || condition for right->left operators */))) &&
+          (!left || (left.opPrecedence && (left.opPrecedence < opPrecedence + rightToLeftOperators.includes(opPrecedence)))) &&
           // right side
-          (!right || (right.opPrecedence && (right.opPrecedence <= opPrecedence /* || condition for right->left operators */)))
+          (!right || (right.opPrecedence && (right.opPrecedence <= opPrecedence - rightToLeftOperators.includes(opPrecedence))))
         ) {
           stack.splice(i - 1, 3, {
             type : "operation",

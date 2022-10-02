@@ -22,16 +22,15 @@ function fillGlobalEnv(env) {
   env.Null = new builtIns.Function([], () => new builtIns.Null())
 
   env.getVar = new builtIns.Function([null], (th, params) => {
-    if (!params.length || !(params[0].is("String"))) error("Variable/namespace name for getVar must be a string.", false, true)
+    if (!params.length || !(params[0].is("String"))) error("Namespace name for getVar must be a string.", false, true)
 
     if (!th.valueExists(params[0].value)) {
-      if (params[1] && params[1].func("toBoolean").value) error("Variable/namespace name for getVar does not exist.", false, true)
+      if (params[1] && params[1].func("toBoolean").value) error("Namespace for getVar does not exist.", false, true)
       else return new builtIns.Null()
     }
 
     return th.getValue(params[0].value)
   })
-  // move to console.
   env.print = new builtIns.Function([null], (_, params) => {
     for (let i of params) log(i.func("toString").value)
   })
@@ -48,7 +47,7 @@ function fillGlobalEnv(env) {
   })
   // move to math.
   env.randBool = new builtIns.Function([], (_, params) => {
-    if (params.length && !(params[0].is("Number"))) error("Chance for Math.randBool must be a number or blank (default 0.5).", false, true)
+    if (params.length && !(params[0].is("Number"))) error("Chance for math.randBool must be a number or blank (default 0.5).", false, true)
 
     return new builtIns.Boolean(Math.random() < (params[0]?.value ?? 0.5))
   })
@@ -115,6 +114,16 @@ class Base {
     else if ("parent" in this) return this.parent.valueExists(name)
 
     return false
+  }
+
+  squareBracketGet(val) {
+    if (this.valueExists("__get")) {
+      var getFunc = this.getValue("__get")
+
+      if (!getFunc.is("Block"))
+
+      return getFunc.call()
+    }
   }
 
   is(type) {
@@ -412,25 +421,25 @@ fields.Array.toString = new builtIns.Function([], (th, params) => {
   return new builtIns.String(`[${th.value.map(x => x.func("toString").value).join(delimiter)}]`)
 })
 fields.Array.length = new builtIns.Function([], th => new builtIns.Number(th.value.length))
-fields.Array.reverse = new builtIns.Function([], th => new builtIns.Array(th.value.sort(() => false)))
+fields.Array.reverse = new builtIns.Function([], th => new builtIns.Array(th.value.reverse()))
 
 fields.String.isString = new builtIns.Function([], () => new builtIns.Boolean(true))
 fields.String.toString = new builtIns.Function([], th => th)
 fields.String.length = new builtIns.Function([], th => new builtIns.Number(th.value.length))
 fields.String.toBoolean = new builtIns.Function([], th => new builtIns.Boolean(th.value.length))
 fields.String.spread = new builtIns.Function([], th => new builtIns.Array([...th.value]))
-fields.String.reverse = new builtIns.Function([], th => new builtIns.String([...th.value].sort(() => false).join("")))
+fields.String.reverse = new builtIns.Function([], th => new builtIns.String([...th.value].reverse().join("")))
 fields.String.slice = new builtIns.Function([], (th, params) => {
   var start = 0, end = this.value.length
 
   if (params[0]) {
-    if (!params[0].is("Number") || params[0].value < 0)
+    if (!params[0].is("Number"))
       error("Start position for [String].slice must be an integer or blank (default start of string).", false, true)
 
     start = params[0].value
   }
   if (params[1]) {
-    if (!params[1].is("Number") || params[1].value < 0)
+    if (!params[1].is("Number"))
       error("End position for [String].slice must be an integer or blank (default end of string).", false, true)
 
     end = params[1].value

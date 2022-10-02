@@ -95,12 +95,12 @@ var TESTRESULTS = {};
       }
     },
     singleOperators : {
-      input : "+ - * /^ %& | <> . \\ ?! #=",
+      input : "+ - * /^ %& | <> .~  ?! =",
       expected : [
         "operator", "+", "operator", "-", "operator", "*", "operator", "/",
         "operator", "^", "operator", "%", "operator", "&", "operator", "|",
-        "operator", "<", "operator", ">", "operator", ".", "operator", "\\",
-        "operator", "?", "operator", "!", "operator", "#", "operator", "="
+        "operator", "<", "operator", ">", "operator", ".", "operator", "~",
+        "operator", "?", "operator", "!", "operator", "="
       ],
       run : input => {
         var tokenizer = new Tokenizer(new Characterizer(input)), output = []
@@ -585,8 +585,10 @@ print test "hi"`,
   }
 
   function testEquality(result, test) {
+    var match
+
     if (Array.isArray(result) && Array.isArray(test.expected)) {
-      var match = result.length === test.expected.length
+      match = result.length === test.expected.length
 
       for (let i = 0; i < result.length; i++)
         if (!testEquality(result[i], {expected : test.expected[i]})) {
@@ -599,7 +601,7 @@ print test "hi"`,
     } else if (typeof result === "object" && typeof test.expected === "object" && result !== null && test.expected !== null) {
       var resultKeys = Object.keys(result), testKeys = Object.keys(test.expected)
 
-      var match = resultKeys.length === testKeys.length
+      match = resultKeys.length === testKeys.length
 
       for (let i = 0; i < resultKeys.length; i++)
         if (resultKeys[i] !== testKeys[i] ||
@@ -617,16 +619,19 @@ print test "hi"`,
   function format(text, doFormatting) {
     if (typeof text === "string") return `"${doFormatting ? "<u>" : ""}${text}${doFormatting ? "</u>" : ""}"`
     else if (typeof text === "object" && text !== null) {
+      var output
+
       if (Array.isArray(text)) {
         if (text.length === 0) return "[]"
 
-        var output = "["
+        output = "["
 
         text.forEach(x => { output += `${format(x, doFormatting)}, ` })
 
         return output.slice(0, -2) + "]"
       } else {
-        var output = "{", keys = Object.keys(text)
+        output = "{"
+        var keys = Object.keys(text)
 
         if (keys.length === 0) return "{}"
 

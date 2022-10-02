@@ -50,7 +50,7 @@ class Tokenizer {
 
     if (char) {
       if ("()[]{},:;@".includes(char)) return this.formatReturn("punc", char)
-      else if ("=+-*/^><&|^%!.\\#?".includes(char)) return this.parseOp(char)
+      else if ("=+-*/^><&|^%!.?~".includes(char)) return this.parseOp(char)
       else if (/[A-Za-z_]/.test(char)) return this.parseIdentifier(char)
       else if (char === "\"" || char === "'") return this.parseString(char)
       else if (/\d/.test(char)) return this.parseNumber(char)
@@ -85,7 +85,7 @@ class Tokenizer {
   parseOp(char) {
     var nextChar = this.ch.peek()
 
-    if ("!><+-*/^%&|=".includes(char) && nextChar === "=")
+    if ("~!><+-*/^%&|=".includes(char) && nextChar === "=")
       return this.formatReturn("operator", char + this.ch.next())
     else if ("+-*&|?.".includes(char) && nextChar === char) {
       this.ch.next()
