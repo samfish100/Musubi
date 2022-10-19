@@ -2,38 +2,37 @@ class Executor {
   constructor(ast) {
     this.ast = ast
   }
+  currentEnv = null
 
   GO() {
-    this.globalEnv = this.newEnv(true)
+    this.globalEnv = this.newEnv(null, this)
 
     if (this.ast.declarations.length || this.ast.statements.length) this.execBlock(this.ast, false)
   }
 
-  newEnv(global) {
-    return this.currentEnv = new Environment(this.currentEnv, global)
+  newEnv(parent, global) {
+    return this.currentEnv = new Environment(parent || this.currentEnv, global)
   }
 
-  execBlock(block, inFunction, addedVars = {}) {
-    this.newEnv()
+  execBlock(block, inFunction, addedVars = {}, env = null) {
+    this.newEnv(env)
 
-    for (let i in addedVars) this.currentEnv.setValue(i, addedVars[i])
+    for (let i in addedVars) this.currentEnv.setThisValue(i, addedVars[i])
 
-    if (block.declarations.length)
-      for (let i of block.declarations)
-        this.execFuncDecl(i)
+    for (let i of block.declarations)
+      this.execFuncDecl(i)
 
-    if (block.statements.length)
-      for (let i of block.statements) {
-        this.execStatement(i)
+    for (let i of block.statements) {
+      this.execStatement(i)
 
-        if (this.return) {
-          var returnVal = this.return
+      if (this.return) {
+        var returnVal = this.return
 
-          if (inFunction) this.return = null
+        if (inFunction) this.return = null
 
-          return returnVal
-        }
+        return returnVal
       }
+    }
 
     if (this.currentEnv.parent) this.currentEnv = this.currentEnv.parent
   }
@@ -46,79 +45,92 @@ class Executor {
     else error(`Statement type ${ast.type} is currently not implemented, it will be ignored.`, true, true)
   }
 
-  execExpression(ast) {
-    if (ast.type === "operation") return this.execOperation(ast)
+  execExpression(ast, retLeft = false) {
+    if (ast.type === "operation") return this.execOperation(ast, retLeft)
     else if (ast.type === "identifier") return this.currentEnv.getValue(ast.value, true)
-    else if (ast.type === "number") return new builtIns.Number(ast.value)
-    else if (ast.type === "string") return new builtIns.String(ast.value)
-    else if (ast.type === "boolean") return new builtIns.Boolean(ast.value === "true")
-    else if (ast.type === "null") return new builtIns.Null()
-    else if (ast.type === "array") return new builtIns.Array(ast.value.map(x => this.execExpression(x)))
+    else if (ast.type === "number") return new this.builtIns.Number(ast.value)
+    else if (ast.type === "string") return new this.builtIns.String(ast.value)
+    else if (ast.type === "boolean") return new this.builtIns.Boolean(ast.value === "true")
+    else if (ast.type === "null") return new this.builtIns.Null()
+    else if (ast.type === "array") return new this.builtIns.Array(ast.value.map(x => this.execExpression(x)))
 
     error(`Expression type ${ast.type} is currently not implemented, it will be replaced with a null.`, true, true)
-    return new builtIns.Null()
+    return new this.builtIns.Null()
   }
 
-  execOperation(ast) {
+  execOperation(ast, retLeft = false) {
     var {left, right, op} = ast,
-        isAssignment = op.endsWith("=") && !["==", "!=", ">=", "<=", "~="].includes(op)
+        isAssignment = op.endsWith("=") && !["==", "!=", ">=", "<=", "~="].includes(op),
+        res, context = null
 
-    if (left && !isAssignment) left = this.execExpression(left)
+    if (left && !isAssignment) {
+      left = this.execExpression(left, op === "(" && left.op === ".")
+      if (Array.isArray(left)) {
+        console.log("HI");
+
+        [left, context] = left
+
+        console.log("why it no work", left, context)
+      }
+    }
     if (right && !["&&", "||", "."].includes(op)) right = this.execExpression(right)
 
-    if (op === "(") {
-      return this.execFuncCall(left, ast.extra)
+    if (op === "(")
+      res = this.execFuncCall(left, ast.extra, context)
+    else if (op === "..")
+      res = new this.builtIns.String(left.func("toString").value + right.func("toString").value)
       // ARITHMETIC
-    } else if (op === "+") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value + right.value)
-      else if (left.is("Array") && right.is("Array")) return new builtIns.Array(left.value.concat(right.value))
+    else if (op === "+") {
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Number(left.value + right.value)
+      else if (left.is("Array") && right.is("Array")) res = new this.builtIns.Array(left.value.concat(right.value))
+      else if (left.is("String") && right.is("String")) res = new this.builtIns.String(left.value + right.value)
       else error(`Cannot add types ${left.name} and ${right.name}.`, false, true)
     } else if (op === "-") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value - right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Number(left.value - right.value)
       else error(`Cannot subtract types ${left.name} and ${right.name}.`, false, true)
     } else if (op === "*") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value * right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Number(left.value * right.value)
       else error(`Cannot multiply types ${left.name} and ${right.name}.`, false, true)
     } else if (op === "/") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value / right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Number(left.value / right.value)
       else error(`Cannot divide types ${left.name} and ${right.name}.`, false, true)
     } else if (op === "**") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Number(left.value ** right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Number(left.value ** right.value)
       else error(`Cannot raise type ${left.name} to type ${right.name}.`, false, true)
       // LOGIC
     } else if (op === "&&") {
-      if (!left.func("toBoolean").value) return left
-      return this.execExpression(right)
+      if (!left.func("toBoolean").value) res = left
+      res = this.execExpression(right)
     } else if (op === "||") {
-      if (left.func("toBoolean").value) return left
-      return this.execExpression(right)
+      if (left.func("toBoolean").value) res = left
+      res = this.execExpression(right)
     } else if (op === "!")
-      return new builtIns.Boolean(!right.func("toBoolean").value)
+      res = new this.builtIns.Boolean(!right.func("toBoolean").value)
       // EQUALITY
     else if (op === "==")
-      return new builtIns.Boolean(left === right || left.value === right.value)
+      res = new this.builtIns.Boolean(left === right || left.value === right.value)
     else if (op === "!=")
-      return new builtIns.Boolean(left !== right && left.value !== right.value)
+      res = new this.builtIns.Boolean(left !== right && left.value !== right.value)
     else if (op === "~=")
-      return new builtIns.Boolean(left === right || left.func("toString").value === right.func("toString").value)
+      res = new this.builtIns.Boolean(left === right || left.func("toString").value === right.func("toString").value)
     else if (op === "<") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value < right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Boolean(left.value < right.value)
       else error(`Invalid types ${left.name} and ${right.name} for '<' operator.`)
     } else if (op === ">") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value > right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Boolean(left.value > right.value)
       else error(`Invalid types ${left.name} and ${right.name} for '>' operator.`)
     } else if (op === "<=") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value <= right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Boolean(left.value <= right.value)
       else error(`Invalid types ${left.name} and ${right.name} for '<=' operator.`)
     } else if (op === ">=") {
-      if (left.is("Number") && right.is("Number")) return new builtIns.Boolean(left.value >= right.value)
+      if (left.is("Number") && right.is("Number")) res = new this.builtIns.Boolean(left.value >= right.value)
       else error(`Invalid types ${left.name} and ${right.name} for '>=' operator.`)
       // ASSIGNMENT
     } else if (isAssignment) {
       if (left.type === "identifier") {
         this.currentEnv.setValue(left.value, right)
 
-        return right
+        res = right
       } else if (left.type === "operation" && left.op === ".") {
         var key = left.right
 
@@ -129,7 +141,7 @@ class Executor {
 
         this.execExpression(left.left).setValue(key.value, right)
 
-        return right
+        res = right
       } else error("Left side of assignment expression is not a reference.", false, true)
       // LOOKUP
     } else if (op === ".") {
@@ -138,39 +150,31 @@ class Executor {
 
       if (right.parentheses) right = this.execExpression(right).func("toString")
 
-      return left.getValue(right.value, true)
+      res = left.getValue(right.value, true)
     } else if (op === "[") {
       // if (!right.is("Number") || !Number.isInteger(right.value)) error("Lookup index is not an integer.")
 
-      return left.squareBracketGet(right)
+      res = left.squareBracketGet(right)
+    } else {
+      error(`Operator type ${op} is currently not implemented, it will be replaced with a null.`, true, true)
+      res = new this.builtIns.Null()
     }
 
-    error(`Operator type ${op} is currently not implemented, it will be replaced with a null.`, true, true)
-    return new builtIns.Null()
+    if (retLeft) return [res, left]
+    else return res
   }
 
-  execFuncCall(func, params) {
-    if (func instanceof builtIns.Function) {
-      var requiredParams = 0
-      func.params.forEach(x => { if (x === null || !("default" in x)) requiredParams++ })
-      if (params.length < requiredParams) error(`Not enough parameters passed to function (expected ${(requiredParams < func.params.length ? "at least " : "") + requiredParams}).`, false, true)
+  execFuncCall(func, params, thisArg = null) {
+    if (!(func instanceof this.builtIns.Function)) problem("Function passed to execFuncCall() is not an instance of builtIns.Function")
 
-      var parameters = {}, returnVal
+    return func.call(thisArg, params.map(x => this.execExpression(x)))
 
-      if (func.body instanceof Function) returnVal = func.body(this.currentEnv, params.map(x => this.execExpression(x)))
-      else {
-        for (let i in func.params) parameters[func.params[i].name] = this.execExpression(params[i])
-
-        returnVal = this.execBlock(func.body, true, parameters)
-      }
-
-      return returnVal || new builtIns.Null()
-    } else if (ast.params.length)
-      error(`Unexpected parameter list; ${func.func("toString").value} is not a function.`, false, true)
+    // if (ast.params.length)
+    //   error(`Unexpected parameter list; ${func.func("toString").value} is not a function.`, false, true)
   }
 
   execFuncDecl(ast) {
-    this.currentEnv.setValue(ast.name, new builtIns.Function(ast.params, ast.body), false)
+    this.currentEnv.setValue(ast.name, new this.builtIns.Function(ast.params, ast.body, this.currentEnv), false)
   }
 
   execIf(ast) {
@@ -180,20 +184,21 @@ class Executor {
 
   execLoop(ast) {
     var times = this.execExpression(ast.times)
-    if (!(times instanceof builtIns.Number) || times.value < 0 || !Number.isInteger(times.value))
+    if (!(times instanceof this.builtIns.Number) || times.value < 0 || !Number.isInteger(times.value))
       error("Times to loop for loop statement must be a positive integer.", false, true)
 
     for (let i = 0; i < times.value; i++) this.execBlock(ast.body)
   }
 }
 
-class Environment {
-  constructor(parent, global) {
+class Environment { // is the executor instance if global, otherwise false
+  constructor(parent, execIfGlobal = false) {
     this.parent = parent
 
     this.content = {}
 
-    if (global) fillGlobalEnv(this.content)
+    if (execIfGlobal)
+      execIfGlobal.builtIns = this.builtIns = fillGlobalEnv(this.content, execIfGlobal)
   }
 
   setValue(name, value, canExist = true, reportResult = false) {
@@ -214,12 +219,16 @@ class Environment {
     this.content[name] = value
   }
 
+  setThisValue(name, value) {
+    this.content[name] = value
+  }
+
   getValue(name, mustExist = false) {
     if (name in this.content) return this.content[name]
     else if (this.parent) return this.parent.getValue(name, mustExist)
     else if (mustExist) error(`Namespace ${name} does not exist.`, false, true)
 
-    return new builtIns.Null()
+    return new this.builtIns.Null()
   }
 
   valueExists(name) {

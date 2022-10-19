@@ -1,7 +1,7 @@
 const operatorPrecedence = {
   // ~
   "." : 18, ":" : 18, "[" : 18,
-  "$" : 17,
+  // "$" : 17,
   "(" : 16,
   "!" : 15,
   "**" : 14,
@@ -15,7 +15,7 @@ const operatorPrecedence = {
   "|" : 6,
   "&&" : 5,
   "||" : 4, "??" : 4,
-  "?" : 3,
+  // "?" : 3,
   "=" : 2, "+=" : 2, "-=" : 2, "*=" : 2, "/=" : 2, "^=" : 2, "%=" : 2, "&=" : 2, "|=" : 2, "&&=" : 2, "||=" : 2, "**=" : 2, "??=" : 2
 }
 const rightToLeftOperators = [2, 3, 14],
@@ -61,8 +61,6 @@ class Parser {
 
         return ast
       }
-
-      console.log(this.t.peek(), this.t.newLine, this.t.eof())
 
       if (!this.t.newLine && !this.t.eof())
         error(this.unexpectedToken(
