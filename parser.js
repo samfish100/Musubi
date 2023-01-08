@@ -41,7 +41,7 @@ class Parser {
 
       if (checkForEnd) {
         if (tok.type === "punc" && tok.value === ":") {
-          tokenizer.next()
+          this.t.next()
           singleLine = true
         } else if (!this.t.newLine) error(this.unexpectedToken(tok, "expected a new line or ':' to start code block"))
       }
@@ -56,8 +56,9 @@ class Parser {
       }
 
       tok = this.t.peek()
-      if (singleLine || (checkForEnd && ((tok.type === "punc" && tok.value === ";") || (tok.type === "keyword" && tok.value === "end")))) {
-        if (!singleLine) this.t.next()
+
+      if (singleLine || (checkForEnd && ((tok.type === "punc" && tok.value === ";") || (tok.type === "keyword" && ["end", "elif", "else", "or"].includes(tok.value))))) {
+        if (!singleLine && tok.value === "end") this.t.next()
 
         return ast
       }
@@ -73,6 +74,7 @@ class Parser {
 
     return ast
   }
+
   blankAst() {
     return {
       declarations : [],
@@ -80,10 +82,76 @@ class Parser {
     }
   }
 
+  parseClassCode() {
+    var ast = [],
+        tok = this.t.next()
+
+    if (tok.type !== "identifier") error(this.unexpectedToken(tok, "expected an identifier for class name"))
+    var name = tok.value
+
+    tok = this.t.next()
+
+    while (!(tok.type === "keyword" && tok.value === "end") && !(tok.type === "punc" && tok.value === ";")) {
+      var isStatic = false, getter = false, setter = false
+
+      keywordIf: if (tok.type === "keyword") {
+        if (tok.value === "static") {
+          isStatic = true
+
+          tok = this.t.next()
+
+          if (tok.type !== "keyword") break keywordIf
+        }
+
+        if (tok.value === "get") getter = true
+        else if (tok.value === "set") setter = true
+
+        if (getter || setter) tok = this.t.next()
+      }
+
+      // TODO check for parentheses to parse expression keys
+      if (tok.type !== "identifier") error(this.unexpectedToken(tok, "expected an identifier"))
+
+      var nextTok = this.t.peek()
+
+      if (nextTok.type === "operator" && nextTok.value === "=") {
+        if (getter || setter) error("Class fields cannot be getters or setters.")
+
+        this.t.next()
+
+        ast.push({
+          type : "field",
+          isStatic,
+          name : tok.value,
+          value : this.parseExpression(this.t.next())
+        })
+      } else {
+        var funcDecl = this.parseFuncDecl(false, tok.value)
+
+        funcDecl.type = "method"
+
+        funcDecl.isStatic = isStatic
+        funcDecl.getter = getter
+        funcDecl.setter = setter
+
+        ast.push(funcDecl)
+      }
+
+      tok = this.t.next()
+    }
+
+    return {
+      type : "class",
+      name,
+      contents : ast
+    }
+  }
+
   nextStatement(inFunction) {
     var tok = this.t.next(), statement
 
     if (tok.type === "keyword" && tok.value === "function") statement = this.parseFuncDecl()
+    else if (tok.type === "keyword" && tok.value === "cache") statement = this.parseFuncDecl(true)
     else if (tok.type === "keyword" && tok.value === "if") statement = this.parseIf()
     else if (tok.type === "keyword" && tok.value === "loop") statement = this.parseLoop()
     else if (tok.type === "keyword" && tok.value === "return") statement = this.parseReturn()
@@ -176,7 +244,7 @@ class Parser {
       } else if (tok.value === "[") {
         this.t.next()
 
-        var index = this.parseExpression(this.t.next(), true)
+        var index = this.parseExpression(this.t.next())
 
         tok = this.t.next()
         if (tok.type !== "punc" || tok.value !== "]") error(this.unexpectedToken(tok, "expected ']' to end array access"))
@@ -230,8 +298,22 @@ class Parser {
       if (isNumerical) error("Unexpected null, expected a numerical expression.")
 
       return {type : "null"}
+    } else if (tok.type === "keyword" && tok.value === "this") {
+      if (isNumerical) error("Unexpected 'this', expected a numerical expression.")
+
+      return {type : "this"}
     } else if (tok.type === "punc" && tok.value === "[") {
       if (isNumerical) error("Unexpected array, expected a numerical expression.")
+
+      tok = this.t.peek()
+      if (tok.type === "punc" && tok.value === "]") {
+        this.t.next()
+
+        return {
+          type : "array",
+          value : []
+        }
+      }
 
       var values = this.parseExpressionList("]")
 
@@ -242,7 +324,26 @@ class Parser {
         type : "array",
         value : values
       }
-    } else error(this.unexpectedToken(tok))
+    } else if (tok.type === "punc" && tok.value === "{") {
+      if (isNumerical) error("Unexpected array, expected a numerical expression.")
+
+      var entries = this.parseKVPairs()
+
+      tok = this.t.next()
+      if (tok.type !== "punc" || tok.value !== "}") error(this.unexpectedToken(tok, "expected '}' to end hash."))
+
+      return {
+        type : "hash",
+        value : entries
+      }
+    } else if (tok.type === "keyword" && tok.value === "function")
+      return this.parseFuncDecl()
+    else if (tok.type === "keyword" && tok.value === "class")
+      return this.parseClassCode()
+    else if (tok.type === "keyword" && tok.value === "cache")
+      return this.parseFuncDecl(true)
+    else
+      error(this.unexpectedToken(tok))
   }
 
   formatPrefixForStack(op, isPost) {
@@ -288,13 +389,12 @@ class Parser {
       else if (!closeChar) break
     } while (!closeChar || tok.type !== "punc" || tok.value !== closeChar)
 
-
     return expressions
   }
 
   parseIdentifierList(optional, parens) {
     // TODO if inFunc is true check for '= <expression>' to parse optional params
-    var identifier = this.t.peek(), identifiers = [], sawComma = false
+    var identifier = this.t.peek(), identifiers = []
 
     if (!(identifier.type === "identifier")) {
       if (optional) return identifiers
@@ -314,30 +414,54 @@ class Parser {
       if (identifier.type === "punc" && identifier.value === ",") {
         this.t.next()
         identifier = this.t.peek()
-
-        sawComma = true
       }
 
       if (identifier.type === "punc" && identifier.value === ")") {
-        if (sawComma) error("Unexpected ',' at end of identifier list.")
-
         this.t.next()
 
         break
       }
-
-      sawComma = false
     }
 
     return identifiers
   }
 
-  parseFuncDecl() {
-    var tok = this.t.next(), name, parens = false
+  parseKVPairs() {
+    var tok = this.t.peek(), pairs = {}
 
-    if (tok.type === "identifier") name = tok.value
-    else if (tok.type === "keyword") error("Keywords cannot be used as namespaces.")
-    else error(this.unexpectedToken(tok, "expected an identifier"))
+    while (tok.type === "identifier") {
+      var key = tok.value
+      this.t.next()
+
+      tok = this.t.next()
+      if (tok.type === "punc" && tok.value === ":")
+        tok = this.t.next()
+
+      pairs[key] = this.parseExpression(tok)
+
+      tok = this.t.peek()
+      if (tok.type === "punc" && tok.value === ",") {
+        this.t.next()
+
+        tok = this.t.peek()
+      }
+    }
+
+    return pairs
+  }
+
+  parseFuncDecl(cache, name = null) {
+    if (cache /* && !name */) this.t.next()
+
+    var tok, parens = false
+
+    if (!name) {
+      tok = this.t.next()
+
+      if (tok.type === "identifier") name = tok.value
+      else if (tok.type === "keyword") error("Keywords cannot be used as namespaces.")
+      else error(this.unexpectedToken(tok, "expected an identifier"))
+    }
 
     tok = this.t.peek()
     if (tok.type === "punc" && tok.value === "(") {
@@ -349,9 +473,10 @@ class Parser {
 
     return {
       type : "funcDecl",
-      name : name,
-      params : params,
-      body : this.parseCode(true, true)
+      name,
+      params,
+      body : this.parseCode(true, true),
+      cache
     }
   }
 
@@ -363,11 +488,48 @@ class Parser {
   }
 
   parseIf() {
-    return {
-      type : "if",
-      condition : this.parseExpression(this.t.next()),
-      body : this.parseCode(true, false)
+    var ast = {
+          type : "if",
+          condition : this.parseExpression(this.t.next()),
+          body : this.parseCode(true, false),
+          else : null,
+          elseOr : null
+        },
+        tok = this.t.peek()
+
+    ast.ifOr = this.parseIfOr(tok)
+
+    if (tok.type === "keyword") {
+      if (tok.value === "else") {
+        this.t.next()
+
+        ast.else = this.parseCode(true, false)
+
+        ast.elseOr = this.parseIfOr(this.t.peek())
+      } else if (tok.value === "elif") {
+        this.t.next()
+
+        ast.else = {
+          declarations : [],
+          statements : [this.parseIf()]
+        }
+      }
     }
+
+    return ast
+  }
+
+  parseIfOr(tok) {
+    if (tok.type === "keyword" && tok.value === "or") {
+      this.t.next()
+
+      return {
+        condition : this.parseExpression(this.t.next()),
+        body : this.parseCode(true, false)
+      }
+    }
+
+    return null
   }
 
   parseLoop() {
@@ -379,7 +541,7 @@ class Parser {
   }
 
   unexpectedToken(tok, extra) {
-    var token = tok.value ? `token '${tok.value}'` : "end of file"
+    var token = tok.value ? `'${tok.value}'` : "end of file"
 
     return `Unexpected ${token}${extra ? ", " + extra : ""}.`
   }

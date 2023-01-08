@@ -1,13 +1,14 @@
 // TOKEN TYPES: punc, string, number, operator, keyword, identifier
 
 const keywords = [
-  "if", "elseif", "else", "or", "loop", "for", "while", "repeat", "end",
-  "function", "block", "return", "env",
-  "const", "true", "false", "null"
-], unimplementedKeywords = ["class", "from", "static", "private", "public", "in"]
+  "if", "elif", "else", "or", "loop", "end",
+  "function", "cache", "return", "env", "this",
+  "const", "true", "false", "null",
+  "class", "get", "set", "static"
+], unimplementedKeywords = ["for", "while", "in", "extends"]
 
 class Tokenizer {
-  constructor (ch) {
+  constructor(ch) {
     this.ch = ch
     this._newLine = false
     this.sawSpace = false
@@ -87,9 +88,9 @@ class Tokenizer {
 
     if ("~!><+-*/^%&|=".includes(char) && nextChar === "=")
       return this.formatReturn("operator", char + this.ch.next())
-    else if ("+-*&|?.".includes(char) && nextChar === char) {
+    else if ("+-*&|^?.".includes(char) && nextChar === char) {
       this.ch.next()
-      if (("*&|?.".includes(char)) && this.ch.peek() === "=")
+      if (("*&|^?.".includes(char)) && this.ch.peek() === "=")
         return this.formatReturn("operator", char + nextChar + this.ch.next())
 
       return this.formatReturn("operator", char + nextChar)
@@ -131,7 +132,7 @@ class Tokenizer {
     }
 
     if (unimplementedKeywords.includes(identifier))
-      error(`"${identifier}" is an unimplemented keyword, meaning that it will likely be used in future versions. To maintain compatibility with future versions, avoid using this word.`)
+      error(`The keyword '${identifier}' is reserved.`)
 
     return this.formatReturn(keywords.includes(identifier) ? "keyword" : "identifier", identifier)
   }

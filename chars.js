@@ -59,7 +59,7 @@ function error(msg, isWarn = false, fromExec = false) {
 function log(msg) {
   if (typeof msg !== "string") msg = String(msg)
 
-  msg = msg.replace("<", "&lt;")
+  msg = msg.replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 
   if (msg === "") msg = "<i>[Empty string]</i>"
   else if (msg === "\n") msg = "<i>[New line]</i>"

@@ -1,687 +1,290 @@
-/*
-
-TEMPLATE:
-
-,
-  testName : {
-    input : "",
-    expected : "",
-    run : input => {
-
-    }
-  }
-
-*/
-
-var TESTRESULTS = {};
-(() => {
-  const basicParserTest = input => {
-    var parser = new Parser(new Tokenizer(new Characterizer(input)))
-
-    return parser.GO()
+const tests = {
+  "=" : {
+    test : "x = 2\nx = 5\nreturn x",
+    value : 5
   },
-  basicExecTest = input => {
-    var parser = new Parser(new Tokenizer(new Characterizer(input))),
-        executor = new Executor(parser.GO())
+  "+" : {
+    test : "return 2 + 7",
+    value : 9
+  },
+  "+=" : {
+    test : "x = 2\nx += 5\nreturn x",
+    value : 7
+  },
+  // ++
+  // ++
+  "-" : {
+    test : "return 2 - 7",
+    value : -5
+  },
+  "-=" : {
+    test : "x = 2\nx -= 5\nreturn x",
+    value : -3
+  },
+  // --
+  // --
+  "*" : {
+    test : "return 2 * 7",
+    value : 14
+  },
+  "*=" : {
+    test : "x = 2\nx *= 5\nreturn x",
+    value : 10
+  },
+  "/" : {
+    test : `return 2 / 4`,
+    value : 0.5
+  },
+  "/=" : {
+    test : "x = 2\nx /= 5\nreturn x",
+    value : 0.4
+  },
+  // %
+  // %=
+  "**" : {
+    test : "return 2 ** 7",
+    value : 128
+  },
+  "**=" : {
+    test : "x = 2\nx **= 5\nreturn x",
+    value : 32
+  },
+  "&&" : {
+    test : "return [false && 0, 1 && false, false && 1, 1 && true]",
+    string : "[false, false, false, true]"
+  },
+  "&&=" : {
+    test : "x = 12\ny = 0\nx &&= 4\ny &&= 10\nreturn [x, y]",
+    string : "[4, 0]"
+  },
+  "||" : {
+    test : "return [false || 0, 1 || false, false || 1, 1 || true]",
+    string : "[0, 1, 1, 1]"
+  },
+  "||=" : {
+    test : "x = 12\ny = 0\nx ||= 4\ny ||= 10\nreturn [x, y]",
+    string : "[12, 10]"
+  },
+  // ^^
+  // ^^=
+  // ??
+  // ??=
+  // ^
+  // ^=
+  // &
+  // &=
+  // |
+  // |=
+  // ~
+  ".." : {
+    test : "return 1 .. 'a' .. [2, 3]",
+    value : "1a[2, 3]"
+  },
+  "..=" : {
+    test : "x = 3\nx ..= '45'\nreturn x",
+    value : "345"
+  },
+  "." : {
+    test : "return true.toString()",
+    value : "true"
+  },
+  // ==
+  // !=
+  // ~=
+  // >
+  // >=
+  // <
+  // <=
+  // !
+  // ? :
+  number :  {
+    test : "return 12345",
+    value : 12345
+  },
+  numberNegative :  {
+    test : "return -12345",
+    value : -12345
+  },
+  numberDecimals :  {
+    test : "return [000.000123, .123, 123.00, 123000.]",
+    string : "[0.000123, 0.123, 123, 123000]"
+  },
+  numberScientificNotation :  {
+    test : "return [0.5e10, -4.5e+3]",
+    string : "[5000000000, -4500]"
+  },
+  stringDouble : {
+    test : "return \"test\"",
+    value : "test"
+  },
+  stringSingle : {
+    test : "return 'test'",
+    value : "test"
+  },
+  unterminatedString : {
+    test : "'test test test",
+    error : "Unterminated string \"test test test\"."
+  },
+  unterminatedStringNewLine : {
+    test : "'test test test\ntest test'",
+    error : "Unterminated string \"test test test\"."
+  },
+  stringNewLine : {
+    test : "'test test test\\ntest test'",
+    value : "test test test\ntest test"
+  },
+  array : {
+    test : "return [1, 2, 3]",
+    string : "[1, 2, 3]"
+  },
+  arrayNoCommas : {
+    test : "return [1 2 3]",
+    string : "[1, 2, 3]"
+  },
+  arrayNewLines : {
+    test : "return [\n  1,\n  2,\n  3\n]",
+    string : "[1, 2, 3]"
+  },
+  arrayTrailingComma : {
+    test : "return [1, 2, 3,]",
+    string : "[1, 2, 3]"
+  },
+  arrayDoubleComma : {
+    test : "return [1, 2, , 3]",
+    error : "Unexpected ','."
+  },
+  emptyArray : {
+    test : "return []",
+    string : "[]"
+  },
+  hash : {
+    test : "return {a : 1, b : 2, c : 3}",
+    string : "{a: 1, b: 2, c: 3}"
+  },
+  hashNoColons : {
+    test : "return {a 1, b 2, c 3}",
+    string : "{a: 1, b: 2, c: 3}"
+  },
+  hashNewLines : {
+    test : "return {\n  a : 1,\n  b : 2,\n  c : 3\n}",
+    string : "{a: 1, b: 2, c: 3}"
+  },
+  hashTrailingComma : {
+    test : "return {a : 1, b : 2, c : 3,}",
+    string : "{a: 1, b: 2, c: 3}"
+  },
+  emptyHash : {
+    test : "return {}",
+    string : "{}"
+  },
+  closure : {
+    test : "x = 5\nfunction createVar:\n  y = 3\ncreateVar()\nreturn [x, y]",
+    error : "Namespace y does not exist."
+  },
+  functionsWithSameArgumentName : {
+    test : `a = null
+b = null
+c = null
 
-    executor.GO()
-
-    return executor
-  }
-
-  const tests = {
-    characterizerGeneral : {
-      input : "(**) == = a.\"'b'\".c.'\"d\"'{[]}",
-      expected : [
-        "(", "*", "*", ")", " ",
-        "=", "=", " ", "=", " ",
-        "a", ".", "\"", "'", "b",
-        "'", "\"", ".", "c", ".",
-        "'", "\"", "d", "\"", "'",
-        "{", "[", "]", "}"
-      ],
-      run : input => {
-        var characterizer = new Characterizer(input), output = []
-
-        while (!characterizer.eof()) output.push(characterizer.next())
-
-        return output
-      }
-    },
-    characterizerEof : {
-      input : "x",
-      expected : [false, true],
-      run : input => {
-        var characterizer = new Characterizer(input), output = [characterizer.eof()]
-
-        characterizer.next()
-
-        output.push(characterizer.eof())
-
-        return output
-      }
-    },
-    tokenizerGeneral : {
-      input : "(**) == = block.\"'b'\".c.'\"d\"'{[]}",
-      expected : [
-        "punc", "(", "operator", "**", "punc", ")", "operator", "==",
-        "operator", "=", "keyword", "block", "operator", ".", "string", "'b'",
-        "operator", ".", "identifier", "c", "operator", ".", "string", "\"d\"",
-        "punc", "{", "punc", "[", "punc", "]", "punc", "}"
-      ],
-      run : input => {
-        var tokenizer = new Tokenizer(new Characterizer(input)), output = []
-
-        while (!tokenizer.eof()) {
-          var tok = tokenizer.next()
-
-          output.push(tok.type, tok.value)
-        }
-
-        return output
-      }
-    },
-    tokenizerEof : {
-      input : "xxxx",
-      expected : [false, true],
-      run : input => {
-        var tokenizer = new Tokenizer(new Characterizer(input)), output = [tokenizer.eof()]
-
-        tokenizer.next()
-
-        output.push(tokenizer.eof())
-
-        return output
-      }
-    },
-    singleOperators : {
-      input : "+ - * /^ %& | <> .~  ?! =",
-      expected : [
-        "operator", "+", "operator", "-", "operator", "*", "operator", "/",
-        "operator", "^", "operator", "%", "operator", "&", "operator", "|",
-        "operator", "<", "operator", ">", "operator", ".", "operator", "~",
-        "operator", "?", "operator", "!", "operator", "="
-      ],
-      run : input => {
-        var tokenizer = new Tokenizer(new Characterizer(input)), output = []
-
-        while (!tokenizer.eof()) {
-          var tok = tokenizer.next()
-
-          output.push(tok.type, tok.value)
-        }
-
-        return output
-      }
-    },
-    doubleOperators : {
-      input : "!= >= <=+= -= *= ** /= ^=%= &= |= == ++-- && ?? ||",
-      expected : [
-        "operator", "!=", "operator", ">=", "operator", "<=", "operator", "+=",
-        "operator", "-=", "operator", "*=", "operator", "**", "operator", "/=",
-        "operator", "^=", "operator", "%=", "operator", "&=", "operator", "|=",
-        "operator", "==", "operator", "++", "operator", "--", "operator", "&&",
-        "operator", "??", "operator", "||"
-      ],
-      run : input => {
-        var tokenizer = new Tokenizer(new Characterizer(input)), output = []
-
-        while (!tokenizer.eof()) {
-          var tok = tokenizer.next()
-
-          output.push(tok.type, tok.value)
-        }
-
-        return output
-      }
-    },
-    tripleOperators : {
-      input : "&&= ||= **= ??=",
-      expected : ["operator", "&&=", "operator", "||=", "operator", "**=", "operator", "??="],
-      run : input => {
-        var tokenizer = new Tokenizer(new Characterizer(input)), output = []
-
-        while (!tokenizer.eof()) {
-          var tok = tokenizer.next()
-
-          output.push(tok.type, tok.value)
-        }
-
-        return output
-      }
-    },
-    unterminatedString : {
-      input : "\"string string blah blah blah",
-      expected : ["Unterminated string \"string string blah blah blah\"."],
-      allowErrors : true,
-      useLogs : true,
-      run : basicParserTest
-    },
-    unterminatedStringSingleQuote : {
-      input : "'string string blah blah blah",
-      expected : ["Unterminated string \"string string blah blah blah\"."],
-      allowErrors : true,
-      useLogs : true,
-      run : basicParserTest
-    },
-    unterminatedStringNewLine : {
-      input : "\"string string blah\nblah blah\"",
-      expected : ["Unterminated string \"string string blah\"."],
-      allowErrors : true,
-      useLogs : true,
-      run : basicParserTest
-    },
-    reference : {
-      input : "identifierrrrrr",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "identifierrrrrr",
-              params : []
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCall : {
-      input : "calling 'my', \"function\", 1, 2, 3",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "calling",
-              params : [
-                {
-                  type : "string",
-                  value : "my"
-                },
-                {
-                  type : "string",
-                  value : "function"
-                },
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "number",
-                  value : 2
-                },
-                {
-                  type : "number",
-                  value : 3
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCallNested : {
-      input : "nested 1, func 'aaa', testing 2.3",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "nested",
-              params : [
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "reference",
-                  name : "func",
-                  params : [
-                    {
-                      type : "string",
-                      value : "aaa"
-                    },
-                    {
-                      type : "reference",
-                      name : "testing",
-                      params : [
-                        {
-                          type : "number",
-                          value : 2.3
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCallTwoLineParams : {
-      input : "myFunc 1, 2\n3, 4",
-      expected : {
-        type : "expression",
-        value : {
-          type : "reference",
-          name : "myFunc",
-          params : [
-            {
-              type : "number",
-              value : 1
-            },
-            {
-              type : "number",
-              value : 2
-            }
-          ]
-        }
-      },
-      run : input => {
-        var parser = new Parser(new Tokenizer(new Characterizer(input)))
-
-        return parser.nextStatement(false)
-      }
-    },
-    funcCallTwoLineCommaParams : {
-      input : "myFunc 1, 2,\n3, 4",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "myFunc",
-              params : [
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "number",
-                  value : 2
-                },
-                {
-                  type : "number",
-                  value : 3
-                },
-                {
-                  type : "number",
-                  value : 4
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCallParentheses : {
-      input : "myFunc(1 2 3 4)",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "myFunc",
-              params : [
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "number",
-                  value : 2
-                },
-                {
-                  type : "number",
-                  value : 3
-                },
-                {
-                  type : "number",
-                  value : 4
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCallNewLineParentheses : {
-      input : "myFunc(1 2\n3 4)",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "myFunc",
-              params : [
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "number",
-                  value : 2
-                },
-                {
-                  type : "number",
-                  value : 3
-                },
-                {
-                  type : "number",
-                  value : 4
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    funcCallCommasAndParentheses : {
-      input : "myFunc(1 2,\n3, 4)",
-      expected : {
-        declarations : [],
-        statements : [
-          {
-            type : "expression",
-            value : {
-              type : "reference",
-              name : "myFunc",
-              params : [
-                {
-                  type : "number",
-                  value : 1
-                },
-                {
-                  type : "number",
-                  value : 2
-                },
-                {
-                  type : "number",
-                  value : 3
-                },
-                {
-                  type : "number",
-                  value : 4
-                }
-              ]
-            }
-          }
-        ]
-      },
-      run : basicParserTest
-    },
-    globalEnvCreated : {
-      input : "",
-      expected : [true, undefined],
-      run : input => {
-        var exec = basicExecTest(input)
-
-        return ["globalEnv" in exec, exec.globalEnv?.parent]
-      }
-    },
-    printFunc : {
-      input : "print 'hello world'",
-      expected : ["hello world"],
-      useLogs : true,
-      run : basicExecTest
-    },
-    nestedPrintFunc : {
-      input : "print print 3",
-      expected : ["3", "null"],
-      useLogs : true,
-      run : basicExecTest
-    },
-    literalCreationFunctions : {
-      input : "print Number '3'\nprint String 'hello'\nprint Boolean 'world'\nprint Null",
-      expected : ["3", "hello", "true", "null"],
-      useLogs : true,
-      run : basicExecTest
-    },
-    booleanConversion : {
-      input : "print Boolean 0\nprint Boolean 'hi'\nprint Boolean print Boolean true",
-      expected : ["false", "true", "true", "false"],
-      useLogs : true,
-      run : basicExecTest
-    },
-    funcDefinition : {
-      input : `function test val
-  print val
-end`,
-      expected : [],
-      useLogs : true,
-      run : basicExecTest
-    },
-    funcDefinitionWithCall : {
-      input : `function test val
-  print val
+function testA arg
+  a = arg
+  testB(arg - 5)
+  c = arg
 end
 
-print test 123`,
-      expected : ["123", "null"],
-      useLogs : true,
-      run : basicExecTest
-    },
-    funcDefinitionWithReturn : {
-      input : `function test val
-  return val
-end`,
-      expected : [],
-      useLogs : true,
-      run : basicExecTest
-    },
-    funcDefinitionWithCallAndReturn : {
-      input : `function test val
-  return val
-end
+function testB arg:
+  b = arg
 
-print test "hi"`,
-      expected : ["hi"],
-      useLogs : true,
-      run : basicExecTest
-    }
+testA(5)
+return [a, b, c]`,
+    string : "[5, 0, 5]"
+  },
+  nonWritablePropertyAssignment : {
+    test : "{}.toString = 123",
+    error : "Cannot assign to non-writable property 'toString'."
+  },
+  arrayPush : {
+    test : "arr = [1, 2]\narr.push(3)\nreturn arr",
+    string : "[1, 2, 3]"
+  },
+  arrayPushMultiple : {
+    test : "arr = [1, 2]\narr.push(3, 4, 5)\nreturn arr",
+    string : "[1, 2, 3, 4, 5]"
+  },
+  emptyArrayPush : {
+    test : "arr = []\narr.push(98765)\nreturn arr",
+    string : "[98765]"
+  },
+  arrayPushReturnNull : {
+    test : "arr = []\nreturn arr.push(123)",
+    value : null
+  },
+  arrayPop : {
+    test : "return [1, 2, 3].pop()",
+    value : 3
+  },
+  arrayPopMultiple : {
+    test : "return [1, 2, 3, 4].pop(6)",
+    string : "[4, 3, 2, 1, null, null]"
+  },
+  emptyArrayPop : {
+    test : "return [].pop()",
+    value : null
+  },
+  arrayPopNone : {
+    test : "return [1, 2, 3].pop(0)",
+    string : "[]"
+  }
+}
+
+function execTest(name, test) {
+  var exec = new Executor({declarations : [], statements : []}), error
+
+  exec.GO()
+
+  try {
+    var result = exec.execBlock(
+      new Parser(
+        new Tokenizer(new Characterizer(test.test))
+      ).GO(),
+      true
+    )
+  } catch (e) {
+    console.error(e)
+
+    error = e
   }
 
-  //––––––––––––––––––––––––––––––––//
+  var target, value, testType
+  if ("value" in test) {
+    target = test.value
+    value = result?.value
 
-  const testGroups = {
-    CHARACTERIZER : ["characterizerGeneral", "characterizerEof"],
-    TOKENIZER : [
-      "tokenizerGeneral", "tokenizerEof",
-      "singleOperators", "doubleOperators", "tripleOperators",
-      "unterminatedString", "unterminatedStringSingleQuote", "unterminatedStringNewLine"
-    ],
-    PARSER : [
-      "reference",
-      "funcCall", "funcCallNested", "funcCallTwoLineParams", "funcCallTwoLineCommaParams",
-      "funcCallParentheses", "funcCallTwoLineParentheses", "funcCallCommasAndParentheses"
-    ],
-    EXECUTION : ["globalEnvCreated", "printFunc", "nestedPrintFunc", "literalCreationFunctions"],
-    REFERENCE : ["reference", "funcCall", "funcCallNested", "funcCallTwoLineParams", "funcCallTwoLineCommaParams"],
-    FUNCTION_CALL : ["funcCall", "funcCallNested", "funcCallTwoLineParams", "funcCallTwoLineCommaParams"],
-    OPERATOR_TOKENIZING : ["singleOperators", "doubleOperators", "tripleOperators"],
-    UNTERMINATED_STRING : ["unterminatedString", "unterminatedStringSingleQuote", "unterminatedStringNewLine"]
+    testType = "v"
+  } else if (test.error) {
+    target = test.error
+    value = error.replace(/ERROR: (line \d+ column \d+: )?/, "")
+
+    testType = "e"
+  } else {
+    target = test.string
+    value = result?.func("toString").value
+
+    testType = "s"
   }
 
-  //––––––––––––––––––––––––––––––––//
+  var success = target === value
 
-  Object.keys(testGroups).forEach(x => { e("testSelect").innerHTML += `<option>${x}</option>` })
-  Object.keys(tests).forEach(x => { e("testSelect").innerHTML += `<option>${x}</option>` })
+  consoleMsg(
+    `<div class = "test${success}">${Object.keys(tests).indexOf(name)}. <b style = "color: inherit;">${name.replaceAll(/([a-z])([A-Z])/g, "$1 $2").toUpperCase()}</b></div>` +
+    `<div>CODE (${testType}): <i style = "opacity: 0.7;">${test.test.replaceAll("\n", "\n          ")}</i></div>` +
+    `<div>EXPECTED: ${formatMessage(target)}</div>` +
+    (error && !test.error ? `<div class = "testfalse">${error}</div>` : `<div>  RESULT: ${formatMessage(value)}</div>`)
+  )
 
-  function runTest(testList) {
-    var logFuncBackup = log, returnLogs, errorFuncBackup = error, errors = [], sawError
+  // console.table({name, succeeded : target === value, target, value})
+  console.log(`%c${name.replaceAll(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()}%c\nEXPECTED: ${target}\nRESULT: ${value}`, `font-weight: bold; color: ${success ? "lawngreen" : "tomato"};`, "font-weight: unset; color: unset;")
+}
 
-    log = msg => returnLogs.push(msg)
-    error = (msg, isWarn, fromExec) => {
-      if (!isWarn) sawError = true
-
-      returnLogs.push(msg)
-      errors.push({msg, isWarn, fromExec, line, column})
-
-      errorFuncBackup(msg, isWarn, fromExec)
-    }
-
-    var summary = []
-
-    if (testGroups[testList[0]]) testList = testGroups[testList[0]]
-
-    testList.forEach((x, num) => {
-      var test = tests[x], result
-      sawError = false
-
-      returnLogs = []
-
-      try {
-        result = test.run(test.input)
-      } catch(err) {
-        consoleMsg(err, "error")
-
-        stack = err.stack
-        sawError = true
-      }
-      if (test.useLogs) result = returnLogs
-
-      var succeeded = Boolean((!sawError || test.allowErrors) && testEquality(result, test))
-
-      console.log(`${num}.${x}: %c${succeeded}`, "color: #" + (succeeded ? "4f0" : "f40"), test.input, test.expected, "=>", result)
-      consoleMsg(`${num}.${x}: <span class = "test${succeeded}">${succeeded}</span> <b>(</b><span class = "testRes">${format(test.input, true)}</span> <b>=</b> <span class = "testRes">${format(test.expected, true)}</span><b>) =></b> <span class = "testRes">${format(result, true)}</span>`, "log")
-
-      summary.push([x, succeeded])
-      TESTRESULTS[x] = {
-        num : num,
-        input : test.input,
-        expected : test.expected,
-        result : result,
-        succeeded : succeeded,
-        logs : returnLogs,
-        usedLogs : test.useLogs
-      }
-    })
-
-    log = logFuncBackup
-    error = errorFuncBackup
-
-    console.log("errors: ", errors)
-
-    return summary
-  }
-
-  function testEquality(result, test) {
-    var match
-
-    if (Array.isArray(result) && Array.isArray(test.expected)) {
-      match = result.length === test.expected.length
-
-      for (let i = 0; i < result.length; i++)
-        if (!testEquality(result[i], {expected : test.expected[i]})) {
-          match = false
-
-          break
-        }
-
-      return match
-    } else if (typeof result === "object" && typeof test.expected === "object" && result !== null && test.expected !== null) {
-      var resultKeys = Object.keys(result), testKeys = Object.keys(test.expected)
-
-      match = resultKeys.length === testKeys.length
-
-      for (let i = 0; i < resultKeys.length; i++)
-        if (resultKeys[i] !== testKeys[i] ||
-          !testEquality(result[resultKeys[i]], {expected : test.expected[testKeys[i]]})) {
-
-          match = false
-
-          break
-        }
-
-      return match
-    } else return result === test.expected
-  }
-
-  function format(text, doFormatting) {
-    if (typeof text === "string") return `"${doFormatting ? "<u>" : ""}${text}${doFormatting ? "</u>" : ""}"`
-    else if (typeof text === "object" && text !== null) {
-      var output
-
-      if (Array.isArray(text)) {
-        if (text.length === 0) return "[]"
-
-        output = "["
-
-        text.forEach(x => { output += `${format(x, doFormatting)}, ` })
-
-        return output.slice(0, -2) + "]"
-      } else {
-        output = "{"
-        var keys = Object.keys(text)
-
-        if (keys.length === 0) return "{}"
-
-        keys.forEach(x => { output += `${x} : ${format(text[x], doFormatting)}, ` })
-
-        return output.slice(0, -2) + "}"
-      }
-    }
-
-    return text
-  }
-
-  function runTests() {
-    var testsToRun = [e("testSelect").value]
-
-    if (testsToRun[0] === "all tests") testsToRun = Object.keys(tests)
-
-    var summary = runTest(testsToRun), succeeded = true, fail, summaryMsg = "", consoleSummary = {}
-
-    summary.forEach(x => {
-      consoleSummary[x[0]] = x[1]
-      summaryMsg += `${x[0]}: <span class = "test${x[1]}">${x[1]}</span>; `
-
-      if (!x[1] && succeeded) {
-        succeeded = false
-
-        fail = x[0]
-      }
-    })
-
-    console.log(consoleSummary, `ALL TESTS SUCCEEDED: ${succeeded}${succeeded ? "" : `  (first fail: ${fail})`}`)
-    consoleMsg(`<b>Test summary:</b>\n${summaryMsg.slice(0, -2)}\n\n<b>ALL TESTS SUCCEEDED:</b> <span class = "test${succeeded}">${succeeded}</span>${succeeded ? "" : `  (first fail: ${fail})`}`, "log")
-  }
-
-  e("runTests").onclick = runTests
-
-  setTimeout(runTests)
-})()
-
-/*
-[...document.querySelectorAll(
-  "*:not(head):not(script):not(link):not(meta):not(html):not(body):not(style):not(title):not(noscript)"
-)].forEach(x => {
-  x.style.transform = "translateY(100px)"
-  x.style.opacity = "0"
-  void x.offsetWidth
-  x.style.transition = "transform 1s ease-out, opacity 1s ease-out"
-  setTimeout(() => {
-    x.style.transform = "translateY(0)"
-    x.style.opacity = "1"
-  }, Math.random() * 2000)
-})
-*/
+for (let i of Object.entries(tests))
+  execTest(...i)

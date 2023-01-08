@@ -3,8 +3,8 @@ function code() { return document.getElementById("input").value }
 
 //––––––––––––––––––––––––––––––––//
 
-const versionNumber = "0.5.0",
-      versionText = "lots of internal changes mostly related to types, reference parser mostly rewritten"
+const versionNumber = "0.6.1",
+      versionText = "getters and setters"
 
 //––––––––––––––––––––––––––––––––//
 
@@ -59,7 +59,7 @@ e("input").onkeydown = x => {
 
   if (cursorStart !== cursorPos) {
     if (key === "Tab") {
-      console.log("u pressed the (unimplemented) tabby tabber key")
+      console.log("u pressed the tabby tabber key")
       
       x.preventDefault()
     }
@@ -137,7 +137,7 @@ function newLine(cursorPos, deIndent = false) {
       afterCursor = code().slice(cursorPos),
       currentLine = beforeCursor ? beforeCursor.split("\n").pop().trim() : ""
 
-  var doKeywordIndent = (/^(if|else|for|while|repeat|function|loop)\b[^:]*$/.test(currentLine) &&
+  var doKeywordIndent = (/^(if|elif|else|or|for|while|repeat|function|loop|class)\b([^:]*|\s*:)$/.test(currentLine) &&
       !currentLine.endsWith(";") && !currentLine.endsWith("end")) ||
       /\b(block)((\s+[\w\s,]+)|(\([\w\s,]+\)))?$/.test(currentLine)
 
@@ -157,7 +157,7 @@ function newLine(cursorPos, deIndent = false) {
 
   cursorPos = cursorPos + 1 + Math.max(0, prevIndent + indent)
 
-  if (doKeywordIndent) newLine(cursorPos, "end")
+  if (doKeywordIndent && !currentLine.endsWith(":")) newLine(cursorPos, "end")
 
   e("input").selectionEnd = cursorPos
   e("input").selectionStart = cursorPos
@@ -189,93 +189,48 @@ e("consoleInput").onkeydown = event => {
   if (event.code === "Enter") {
     consoleMsg(e("consoleInput").value.trim(), "input")
 
-    parseCommand(e("consoleInput").value.trim().replace(/\s{2,}/g, " "))
+    // parseCommand(e("consoleInput").value.trim().replace(/\s{2,}/g, " "))
+    runCommand(e("consoleInput").value)
 
     e("consoleInput").value = ""
   }
 }
 
-function parseCommand(command) {
-  var tokens = command.split(" ")
-  if (tokens[0] === "ast") {
-    if (tokens[1] === "decl") consoleMsg(formatMessage(ast?.declarations) || "no ast", "log")
-    else if (tokens[1] === "stat") consoleMsg(formatMessage(ast?.statements) || "no ast", "log")
-    else consoleMsg(formatMessage(ast) || "no ast", "log")
-  } else if (tokens[0] === "code")
-    consoleMsg(code(), "log")
-  else if (tokens[0] === "run")
-    run()
-  else if (tokens[0] === "save")
-    saveFile(tokens[1] === "html")
-}
+function tryCode(func) {
+  try {
+    func()
+  } catch (err) {
+    consoleMsg(err, "error")
 
-var showBugTracker = false
-e("bugReportClose").onclick = e("bugTracker").onclick = () => {
-  showBugTracker = !showBugTracker
+    if (err instanceof Error) problem(err.message, err.stack)
 
-  if (showBugTracker) {
-    e("flexContainer").style.filter = "brightness(35%)"
-    e("flexContainer").style.pointerEvents = "none"
-    e("bugReportPopup").style.opacity = "1"
-    e("bugReportPopup").style.pointerEvents = "all"
-  } else {
-    e("flexContainer").style.filter = "none"
-    e("flexContainer").style.pointerEvents = "all"
-    e("bugReportPopup").style.opacity = "0"
-    e("bugReportPopup").style.pointerEvents = "none"
+    stack = err.stack
   }
 }
-var bugId = parseInt(localStorage.getItem("bugId")) || 0
-function updateBugs() {
-  e("bugList").innerHTML = ""
 
-  if (localStorage.getItem("bugs")) {
-    localStorage.getItem("bugs").split("º").forEach(x => {
-      var bugElem = document.createElement("details"),
-          bugTitle = document.createElement("summary"),
-          bugResolve = document.createElement("button")
+function runCommand(command) {
+  var code
 
-      bugElem.className = "bugText"
-      bugTitle.className = "bugTitle"
-      bugResolve.className = "popupButton bugResolve"
-      bugResolve.id = x.split("ª")[0]
+  tryCode(() => {
+    code = new Parser(
+      new Tokenizer(
+        new Characterizer(command)
+      )
+    ).GO()
+  })
 
-      bugResolve.onclick = y => {
-        var bugs = localStorage.getItem("bugs").split("º"), id = y.target.id
+  if (code.statements.at(-1)?.type === "expression")
+    var expression = code.statements.splice(-1, 1)[0]
 
-        for (var i = 0; i < bugs.length; i++)
-          if (bugs[i].split("ª")[0] === id) {
-            bugs.splice(i, 1)
+  if (!executor)
+    (executor = new Executor({declarations : [], statements : []})).GO()
 
-            break
-          }
+  tryCode(() => { executor.execBlock(code, false, {}, executor.currentEnv) })
 
-        localStorage.setItem("bugs", bugs.join("º"))
-
-        y.target.parentElement.remove()
-      }
-
-      bugTitle.appendChild(document.createTextNode(x.split("ª")[1]))
-      bugResolve.appendChild(document.createTextNode("resolve"))
-
-      bugElem.appendChild(bugTitle)
-      bugElem.appendChild(bugResolve)
-      bugElem.appendChild(document.createTextNode(x.split("ª")[2]))
-
-      e("bugList").appendChild(bugElem)
-    })
-  }
+  if (expression)
+    tryCode(() => { executor.globalEnv.content.formatPrint.call(null, [executor.execExpression(expression.value)]) })
 }
-updateBugs()
-e("bugSubmit").onclick = () => {
-  var bugText = `${bugId++}ª${e("bugTitle").value}ª${e("bugInput").value}`
 
-  localStorage.setItem("bugId", bugId)
-
-  localStorage.setItem("bugs", localStorage.getItem("bugs") ? localStorage.getItem("bugs") + "º" + bugText : bugText)
-
-  updateBugs()
-}
 e("clearConsole").onclick = () => { e("consoleOutput").innerHTML = "" }
 
 //––––––––––––––––––––––––––––––––//
@@ -284,10 +239,11 @@ const htmlFilePrefix = "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><me
       htmlFileSuffix = "`</script><script src=\"https://musubiminjs.pusheeeeenthecat.repl.co/c.js\"></script><script src=\"https://musubiminjs.pusheeeeenthecat.repl.co/d.js\"></script></html>"
 function saveFile(htmlFile) {
   var a = document.createElement("a")
+
   a.href = "data:application/octet-stream," + encodeURIComponent(
     (htmlFile ? htmlFilePrefix : "") +
-    //     preserve escapes      escape closing `    escape unintentional html closing tags
-    code().replace("\\", "\\\\").replace("`", "\\`").replace("<\/", "<\\/") +
+    //     preserve escapes      escape closing `    escape potential closing script tags
+    code().replace("\\", "\\\\").replace("`", "\\`").replace("</", "<\\/") +
     (htmlFile ? htmlFileSuffix : "")
   )
   a.download = `${htmlFile ? "runnable_" : ""}musubi_program.${htmlFile ? "html" : "txt"}`
@@ -304,52 +260,62 @@ var executor, parser, tokenizer, characterizer, ast
 var stack
 e("go").onclick = run
 
-
 function run() {
   consoleMsg("========Starting code processing========", "noJoinLog")
 
-  setTimeout(() => {
-    try {
-      console.log("========Starting code processing========")
+  var parsingTimer = false, execTimer = false
+  try {
+    console.log("========Starting code processing========")
 
-      console.time("total")
+    console.time("total")
 
-      console.time("init")
-      initializeParser()
-      console.timeEnd("init")
+    console.time("p init")
+    initializeParser()
+    console.timeEnd("p init")
 
-      console.time("parsing")
-      ast = parser.GO()
-      console.timeEnd("parsing")
+    console.time("parsing")
+    parsingTimer = true
 
-      console.time("execInit")
-      executor = new Executor(ast)
-      console.timeEnd("execInit")
+    ast = parser.GO()
 
-      console.time("running")
-      executor.GO()
-      console.timeEnd("running")
+    console.timeEnd("parsing")
+    parsingTimer = false
 
-      console.timeEnd("total")
-    } catch (err) {
-      consoleMsg(err, "error")
+    console.time("e init")
+    executor = new Executor(ast)
+    console.timeEnd("e init")
 
-      if (err instanceof Error) problem(err.message, err.stack)
+    console.time("running")
+    execTimer = true
 
-      stack = err.stack
-    }
-  }, 100)
+    executor.GO()
+
+    console.timeEnd("running")
+    execTimer = false
+
+    console.timeEnd("total")
+  } catch (err) {
+    if (parsingTimer) console.timeEnd("parsing")
+    if (execTimer) console.timeEnd("running")
+    console.timeEnd("total")
+
+    consoleMsg(err, "error")
+
+    if (err instanceof Error) problem(err.message, err.stack)
+
+    stack = err.stack
+  }
 }
 
-function initializeParser() {
+function initializeParser(parserCode = code()) {
   parser = new Parser(
     tokenizer = new Tokenizer(
-      characterizer = new Characterizer(code())
+      characterizer = new Characterizer(parserCode)
     )
   )
 }
 
-function consoleMsg(msg, type) {
+function consoleMsg(msg, type = null) {
   var scroll = false, removeMargin = false
 
   var symbol = "<div class = 'logArrow consoleSymbol'></div>"
@@ -358,7 +324,9 @@ function consoleMsg(msg, type) {
 
   if (consoleOutput.scrollTop + consoleOutput.offsetHeight + 3 > consoleOutput.scrollHeight) scroll = true
   if (type === "log" && consoleOutput.lastElementChild?.className.startsWith("log")) removeMargin = true
-  consoleOutput.innerHTML += `<div ${removeMargin ? "style = 'margin-top: 0; padding: 2px 3px 5px;'" : ""} class = "${type} consoleMsg">${symbol}<div class = "consoleMsgText">${msg}</div></div>`
+
+  consoleOutput.innerHTML += `<div ${removeMargin ? "style = 'margin-top: 0; padding: 2px 3px 5px;'" : ""} class = "${type ? type + " " : ""}consoleMsg">${symbol}<div class = "consoleMsgText">${msg}</div></div>`
+
   if (scroll) consoleOutput.scrollTop = consoleOutput.scrollHeight
 }
 
@@ -369,7 +337,9 @@ function problem(msg, stack) {
 
   err.stack = err.stack.slice(err.stack.indexOf("\n"))
 
-  consoleMsg(`${errorUserMsg}\n\n====================\n${err.line}:${err.column}\n${err.message}\n====================\n\n${(stack ?? err.stack).replaceAll(loc, "./")}`, "problem")
+  var [_, fileName, pos] = (stack ?? err.stack).match(/(\w+\.\w+):(\d+:\d+)/)
+
+  consoleMsg(`${errorUserMsg}\n\n${(stack ?? err.stack).replaceAll(loc, "./")}\n\n====================\n\n${fileName} ${pos}\n${err.message}`, "problem")
 
   var consoleErr = new Error(msg)
 
@@ -378,32 +348,49 @@ function problem(msg, stack) {
   throw consoleErr
 }
 
-function formatMessage(message, indent = "") {
-  if (typeof message === "string") return `"${message}"`
-  else if (message === null) return "null"
-  else if (typeof message === "object") {
+function formatMessage(message, indent = "", recurseCount = 0) {
+  var result, extra = "", truncResult = indent.length >= 24 || recurseCount >= 1
+
+  if (message?._langClass)
+    if (message.value === undefined) {
+      extra = `<${message.func("toString").value}> `
+
+      if (Object.values(message.data).includes(message)) recurseCount++
+
+      message = message.data
+    } else message = message.value
+
+  if (typeof message === "string") result = `"${message}"`
+  else if (message === null) result = "null"
+  else if (truncResult) {
+    delete message.toString
+
+    result = "... " + (message._langClass ? message.func("toString").value : String(message))
+  } else if (typeof message === "object") {
     var output
 
     if (Array.isArray(message)) {
-      if (!message.length) return "[]"
+      if (!message.length) result = "[]"
+      else {
+        output = "["
 
-      output = "["
+        message.forEach(x => { output += `\n${indent + "  "}${formatMessage(x, indent + "  ")},` })
 
-      message.forEach(x => { output += `\n${indent + "  "}${formatMessage(x, indent + "  ")},` })
-
-      return `${output.slice(0, -1)}\n${indent}]`
+        result = `${output.slice(0, -1)}\n${indent}]`
+      }
     } else {
-      if (!Object.keys(message).length) return "{}"
+      if (!Object.keys(message).length) result = "{}"
+      else {
+        output = "{"
 
-      output = "{"
+        Object.keys(message).forEach(x => { output += `\n${indent + "  "}${x} : ${formatMessage(message[x], indent + "  ", recurseCount)},` })
 
-      Object.keys(message).forEach(x => { output += `\n${indent + "  "}${x} : ${formatMessage(message[x], indent + "  ")},` })
-
-      return `${output.slice(0, -1)}\n${indent}}`
+        result = `${output.slice(0, -1)}\n${indent}}`
+      }
     }
   }
 
-  return message
+  return extra + (result || message)
 }
 
 // DEBUG TOOL
@@ -454,11 +441,15 @@ e("debugTEof").onclick = () => {
 }
 
 e("debugAST").onclick = () => {
-  parser = new Parser(
-    tokenizer = new Tokenizer(
-      characterizer = new Characterizer(code())
+  log(
+    formatMessage(
+      new Parser(
+        new Tokenizer(
+          new Characterizer(
+            code()
+          )
+        )
+      ).GO()
     )
   )
-
-  log(formatMessage(parser.GO()))
 }
